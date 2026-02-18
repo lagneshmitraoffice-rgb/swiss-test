@@ -7,7 +7,7 @@ let swe = null;
 let SWE_READY = false;
 
 /* ===================================================
-⏳ WAIT UNTIL SWISSEPH MODULE READY
+⏳ LOAD SWISS EPHEMERIS (BROWSER WASM VERSION)
 =================================================== */
 async function loadSwiss(){
   try{
@@ -17,12 +17,10 @@ async function loadSwiss(){
 
     log("Initializing Swiss Ephemeris...");
 
+    // ⭐ THIS IS THE ONLY PATH CONFIG NEEDED ⭐
     swe = await SwissEphModule({
       locateFile: file => "./" + file
     });
-
-    // ⭐ MOST IMPORTANT LINE ⭐
-    swe.swe_set_ephe_path(".");
 
     SWE_READY = true;
     log("✅ Swiss Ephemeris Ready");
@@ -71,14 +69,20 @@ function degToSign(deg){
 }
 
 /* ===================================================
-🪐 PLANET CALCULATION
+🪐 PLANET CALCULATION (REAL SWISS CALL)
 =================================================== */
 function calculatePlanets(JD){
 
+  log("Applying Lahiri Ayanamsa...");
   swe.set_sid_mode(swe.SE_SIDM_LAHIRI,0,0);
-  const ayan = swe.get_ayanamsa_ut(JD);
 
+  const ayan = swe.get_ayanamsa_ut(JD);
+  log("Ayanamsa loaded");
+
+  log("Calculating Sun...");
   const sun  = swe.calc_ut(JD, swe.SE_SUN, swe.SEFLG_SWIEPH).longitude;
+
+  log("Calculating Moon...");
   const moon = swe.calc_ut(JD, swe.SE_MOON, swe.SEFLG_SWIEPH).longitude;
 
   const sunSid  = norm360(sun  - ayan);
@@ -87,8 +91,16 @@ function calculatePlanets(JD){
   return {
     JulianDay: JD.toFixed(6),
     Ayanamsa: ayan.toFixed(6)+"°",
-    Sun: degToSign(sunSid),
-    Moon: degToSign(moonSid)
+
+    Sun:{
+      Degree:sunSid.toFixed(6)+"°",
+      Zodiac:degToSign(sunSid)
+    },
+
+    Moon:{
+      Degree:moonSid.toFixed(6)+"°",
+      Zodiac:degToSign(moonSid)
+    }
   };
 }
 
@@ -110,11 +122,14 @@ async function generateChart(){
     return;
   }
 
-  log("\nCalculating chart...");
+  log("\n🚀 Starting calculation...");
 
   const JD = getJulianDay(dob,tob);
+  log("Julian Day calculated");
+
   const result = calculatePlanets(JD);
 
+  log("\n✅ Calculation Complete");
   logBox.textContent = JSON.stringify(result,null,2);
 }
 
