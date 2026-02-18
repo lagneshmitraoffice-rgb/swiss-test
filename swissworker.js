@@ -1,67 +1,54 @@
-import SwissEph from "./swisseph.js";
+console.log("🧠 Swiss Worker Booting");
 
 let swe = null;
+let READY = false;
 
-/* ================= INIT SWISS INSIDE WORKER ================= */
+/* ================= LOAD SWISS ================= */
+async function loadSwiss(){
 
-async function initSwiss() {
+  try{
 
-  try {
     const BASE = self.location.origin + "/";
 
-    swe = await SwissEph({
+    const SwissEphModule = (await import("./swisseph.js")).default;
+
+    swe = await SwissEphModule({
       locateFile: file => BASE + file
     });
 
-    /* 🔥 LOAD EPHE FILES INTO WASM FS */
+    // ephemeris folder path
+    swe.swe_set_ephe_path(BASE + "ephe");
 
-    const files = [
-      "sepl_18.se1",
-      "semo_18.se1",
-      "seas_18.se1",
-      "sefstars.txt",
-      "seasnam.txt",
-      "seorbel.txt"
-    ];
-
-    swe.FS.mkdir("/ephe");
-
-    for (const file of files) {
-      const res = await fetch(BASE + "ephe/" + file);
-      const buf = await res.arrayBuffer();
-      swe.FS.writeFile("/ephe/" + file, new Uint8Array(buf));
-    }
-
-    swe.swe_set_ephe_path("/ephe");
-
+    READY = true;
     postMessage({ type: "ready" });
 
-  } catch (err) {
+  }catch(err){
     postMessage({ type: "error", message: err.toString() });
   }
 }
 
 /* ================= JULIAN DAY ================= */
+function getJulianDay(dob,tob){
 
-function getJulianDay(dob, tob) {
+  const [year,month,day] = dob.split("-").map(Number);
+  let [hour,min] = tob.split(":").map(Number);
 
-  const [year, month, day] = dob.split("-").map(Number);
-  let [hour, min] = tob.split(":").map(Number);
+  hour -= 5;
+  min  -= 30;
 
-  hour -= 5; min -= 30;
-  if (min < 0) { min += 60; hour--; }
-  if (hour < 0) { hour += 24; }
+  if(min < 0){ min+=60; hour--; }
+  if(hour < 0){ hour+=24; }
 
-  let Y = year, M = month;
-  if (M <= 2) { Y--; M += 12; }
+  let Y=year; let M=month;
+  if(M<=2){ Y--; M+=12; }
 
-  const A = Math.floor(Y / 100);
-  const B = 2 - A + Math.floor(A / 4);
+  const A=Math.floor(Y/100);
+  const B=2-A+Math.floor(A/4);
 
-  return Math.floor(365.25 * (Y + 4716))
-       + Math.floor(30.6001 * (M + 1))
-       + day + B - 1524.5
-       + (hour + min / 60) / 24;
+  return Math.floor(365.25*(Y+4716))
+      + Math.floor(30.6001*(M+1))
+      + day + B - 1524.5
+      + (hour+min/60)/24;
 }
 
 function norm360(x){ x%=360; if(x<0)x+=360; return x; }
@@ -72,13 +59,11 @@ function degToSign(deg){
   return s[Math.floor(deg/30)]+" "+(deg%30).toFixed(2)+"°";
 }
 
-/* ================= CALCULATION ================= */
+/* ================= CALC ================= */
+function calculatePlanets(JD){
 
-function calculateChart(dob, tob) {
+  swe.set_sid_mode(swe.SE_SIDM_LAHIRI,0,0);
 
-  const JD = getJulianDay(dob, tob);
-
-  swe.set_sid_mode(swe.SE_SIDM_LAHIRI, 0, 0);
   const ayan = swe.get_ayanamsa_ut(JD);
 
   const sun  = swe.calc_ut(JD, swe.SE_SUN, swe.SEFLG_SWIEPH).longitude;
@@ -89,22 +74,33 @@ function calculateChart(dob, tob) {
 
   return {
     JulianDay: JD.toFixed(6),
-    Ayanamsa: ayan.toFixed(6) + "°",
+    Ayanamsa: ayan.toFixed(6)+"°",
     Sun: degToSign(sunSid),
     Moon: degToSign(moonSid)
   };
 }
 
-/* ================= WORKER MESSAGES ================= */
+/* ================= MESSAGE ================= */
+onmessage = async (e)=>{
 
-onmessage = async (e) => {
-
-  if (e.data.type === "init") {
-    await initSwiss();
+  if(e.data.type === "init"){
+    await loadSwiss();
   }
 
-  if (e.data.type === "calc") {
-    const result = calculateChart(e.data.dob, e.data.tob);
-    postMessage({ type: "result", data: result });
+  if(e.data.type === "calc"){
+
+    if(!READY){
+      postMessage({ type:"error", message:"Swiss not ready" });
+      return;
+    }
+
+    try{
+      const JD = getJulianDay(e.data.dob, e.data.tob);
+      const result = calculatePlanets(JD);
+      postMessage({ type:"result", data: result });
+    }catch(err){
+      postMessage({ type:"error", message: err.toString() });
+    }
   }
+
 };
