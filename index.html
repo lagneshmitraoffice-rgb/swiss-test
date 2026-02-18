@@ -4,7 +4,6 @@
   <title>LM Swiss Astro Engine</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- CSS -->
   <link rel="stylesheet" href="./style.css">
 </head>
 
@@ -25,10 +24,141 @@
 
 <button id="generateBtn">Generate Chart</button>
 
-<pre id="resultBox">Booting Swiss Ephemeris...</pre>
+<pre id="resultBox">Booting Swiss...</pre>
 
-<!-- ⭐ LOAD ENGINE (MODULE) -->
-<script type="module" src="./admin-intopscharts.js"></script>
+<script type="module">
+
+const box = document.getElementById("resultBox");
+const log = msg => box.textContent += "\n" + msg;
+
+let swe = null;
+
+/* ===================================================
+🚀 LOAD SWISS (WORKING VERSION)
+=================================================== */
+
+(async () => {
+  try {
+
+    log("Importing SwissEph module...");
+
+    const SwissEphModule = (await import("./swisseph.js")).default;
+
+    log("Initializing SwissEph...");
+
+    swe = await SwissEphModule({
+      locateFile: file => "./" + file
+    });
+
+    log("✅ Swiss Ephemeris Loaded Successfully");
+
+  } catch(err){
+    box.textContent = "❌ Swiss Ephemeris failed to load.\n" + err;
+  }
+})();
+
+/* ===================================================
+📅 JULIAN DAY
+=================================================== */
+
+function getJulianDay(dob, tob){
+
+  const [year,month,day] = dob.split("-").map(Number);
+  let [hour,min] = tob.split(":").map(Number);
+
+  hour -= 5;
+  min  -= 30;
+
+  if(min < 0){ min += 60; hour -= 1; }
+  if(hour < 0){ hour += 24; }
+
+  let Y = year;
+  let M = month;
+
+  if(M <= 2){
+    Y -= 1;
+    M += 12;
+  }
+
+  const A = Math.floor(Y/100);
+  const B = 2 - A + Math.floor(A/4);
+
+  return Math.floor(365.25*(Y+4716))
+      + Math.floor(30.6001*(M+1))
+      + day + B - 1524.5
+      + (hour + min/60)/24;
+}
+
+/* ===================================================
+HELPERS
+=================================================== */
+
+function norm360(x){
+  x%=360;
+  if(x<0)x+=360;
+  return x;
+}
+
+function degToSign(deg){
+  const signs=[
+    "Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+    "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"
+  ];
+  return signs[Math.floor(deg/30)] + " " + (deg%30).toFixed(2) + "°";
+}
+
+/* ===================================================
+🔥 GENERATE CHART
+=================================================== */
+
+document.getElementById("generateBtn").onclick = () => {
+
+  if(!swe){
+    alert("Swiss not loaded yet...");
+    return;
+  }
+
+  const dob = document.getElementById("dob").value;
+  const tob = document.getElementById("tob").value;
+
+  if(!dob || !tob){
+    alert("Enter DOB & TOB");
+    return;
+  }
+
+  box.textContent = "Calculating...";
+
+  const JD = getJulianDay(dob, tob);
+
+  swe.set_sid_mode(swe.SE_SIDM_LAHIRI,0,0);
+
+  const ayan = swe.get_ayanamsa_ut(JD);
+
+  const sun  = swe.calc_ut(JD, swe.SE_SUN, swe.SEFLG_SWIEPH).longitude;
+  const moon = swe.calc_ut(JD, swe.SE_MOON, swe.SEFLG_SWIEPH).longitude;
+
+  const sunSid  = norm360(sun  - ayan);
+  const moonSid = norm360(moon - ayan);
+
+  box.textContent = JSON.stringify({
+    JulianDay: JD.toFixed(6),
+    Ayanamsa: ayan.toFixed(6)+"°",
+
+    Sun:{
+      Degree:sunSid.toFixed(6)+"°",
+      Zodiac:degToSign(sunSid)
+    },
+
+    Moon:{
+      Degree:moonSid.toFixed(6)+"°",
+      Zodiac:degToSign(moonSid)
+    }
+
+  }, null, 2);
+
+};
+
+</script>
 
 </body>
 </html>
