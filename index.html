@@ -1,38 +1,175 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Swiss Ephemeris Boot Test</title>
+  <title>LM Swiss Astro Engine</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body{
+      background:#111;
+      color:white;
+      font-family:Arial;
+      padding:25px;
+    }
+    input{
+      padding:8px;
+      margin:6px 0;
+      width:260px;
+    }
+    button{
+      padding:10px;
+      background:#FFC107;
+      border:none;
+      font-weight:bold;
+      cursor:pointer;
+      margin-top:10px;
+    }
+    pre{
+      background:#000;
+      padding:15px;
+      margin-top:20px;
+      color:#00ff9c;
+      white-space:pre-wrap;
+    }
+  </style>
 </head>
 <body>
 
-<h1>Swiss Ephemeris Boot Test</h1>
-<pre id="log">Booting...</pre>
+<h2>LM Swiss Ephemeris Engine 🚀</h2>
+
+<input id="name" placeholder="Full Name"><br>
+
+<label>DOB</label><br>
+<input id="dob" type="date"><br>
+
+<label>TOB</label><br>
+<input id="tob" type="time"><br>
+
+<input id="pob" placeholder="Place of Birth"><br>
+<input id="country" placeholder="Country"><br>
+
+<button id="generateBtn">Generate Chart</button>
+
+<pre id="log">Booting Swiss...</pre>
 
 <script type="module">
 
-const log = msg => document.getElementById("log").textContent += "\n" + msg;
+const logBox = document.getElementById("log");
+const log = msg => logBox.textContent += "\n" + msg;
+
+let swe = null;
+
+/* ================= LOAD SWISS ================= */
 
 (async () => {
   try {
 
     log("Importing SwissEph module...");
 
-    // ⭐ THIS IS THE REAL MAGIC LINE ⭐
     const SwissEphModule = (await import("./swisseph.js")).default;
 
-    log("Creating SwissEph instance...");
+    log("Initializing SwissEph...");
 
-    const swe = await SwissEphModule({
+    swe = await SwissEphModule({
       locateFile: file => "./" + file
     });
 
-    log("✅ SWISS EPHEMERIS LOADED SUCCESSFULLY");
+    log("✅ Swiss Ephemeris Loaded Successfully");
 
   } catch(err){
-    log("❌ ERROR:");
+    log("❌ ERROR LOADING SWISS:");
     log(err);
   }
 })();
+
+
+/* ================= JULIAN DAY ================= */
+
+function getJulianDay(dob, tob){
+
+  const [year,month,day] = dob.split("-").map(Number);
+  let [hour,min] = tob.split(":").map(Number);
+
+  // IST → UTC
+  hour -= 5;
+  min  -= 30;
+
+  if(min < 0){ min += 60; hour -= 1; }
+  if(hour < 0){ hour += 24; }
+
+  let Y = year;
+  let M = month;
+
+  if(M <= 2){
+    Y -= 1;
+    M += 12;
+  }
+
+  const A = Math.floor(Y/100);
+  const B = 2 - A + Math.floor(A/4);
+
+  return Math.floor(365.25*(Y+4716))
+      + Math.floor(30.6001*(M+1))
+      + day + B - 1524.5
+      + (hour + min/60)/24;
+}
+
+
+/* ================= HELPERS ================= */
+
+function norm360(x){
+  x%=360;
+  if(x<0)x+=360;
+  return x;
+}
+
+function degToSign(deg){
+  const signs=[
+    "Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+    "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"
+  ];
+  return signs[Math.floor(deg/30)] + " " + (deg%30).toFixed(2) + "°";
+}
+
+
+/* ================= GENERATE ================= */
+
+document.getElementById("generateBtn").onclick = () => {
+
+  if(!swe){
+    alert("Swiss not loaded yet...");
+    return;
+  }
+
+  const dob = document.getElementById("dob").value;
+  const tob = document.getElementById("tob").value;
+
+  if(!dob || !tob){
+    alert("Enter DOB & TOB");
+    return;
+  }
+
+  log("\nCalculating...");
+
+  const JD = getJulianDay(dob, tob);
+
+  swe.set_sid_mode(swe.SE_SIDM_LAHIRI,0,0);
+  const ayan = swe.get_ayanamsa_ut(JD);
+
+  const sun  = swe.calc_ut(JD, swe.SE_SUN, swe.SEFLG_SWIEPH).longitude;
+  const moon = swe.calc_ut(JD, swe.SE_MOON, swe.SEFLG_SWIEPH).longitude;
+
+  const sunSid  = norm360(sun  - ayan);
+  const moonSid = norm360(moon - ayan);
+
+  logBox.textContent = JSON.stringify({
+    JulianDay: JD.toFixed(6),
+    Ayanamsa: ayan.toFixed(6) + "°",
+    Sun: degToSign(sunSid),
+    Moon: degToSign(moonSid)
+  }, null, 2);
+
+};
 
 </script>
 
