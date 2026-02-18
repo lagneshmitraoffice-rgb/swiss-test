@@ -8,27 +8,32 @@
 <h1>Swiss Ephemeris Boot Test</h1>
 <pre id="log">Booting...</pre>
 
-<script src="./swisseph.js"></script>
+<script type="module">
 
-<script>
 const log = msg => document.getElementById("log").textContent += "\n" + msg;
 
 (async () => {
   try {
-    log("Creating SwissEph module...");
+
+    log("Importing SwissEph module...");
+
+    // ⭐ THIS IS THE REAL MAGIC LINE ⭐
+    const SwissEphModule = (await import("./swisseph.js")).default;
+
+    log("Creating SwissEph instance...");
 
     const swe = await SwissEphModule({
       locateFile: file => "./" + file
     });
 
     log("✅ SWISS EPHEMERIS LOADED SUCCESSFULLY");
-    console.log(swe);
 
   } catch(err){
     log("❌ ERROR:");
     log(err);
   }
 })();
+
 </script>
 
 </body>
