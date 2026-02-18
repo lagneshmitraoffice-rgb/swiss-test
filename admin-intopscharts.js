@@ -7,20 +7,27 @@ let swe = null;
 let SWE_READY = false;
 
 /* ===================================================
-⏳ LOAD SWISS EPHEMERIS (BROWSER WASM VERSION)
+⏳ LOAD SWISS EPHEMERIS
 =================================================== */
 async function loadSwiss(){
   try{
+
     log("Importing Swiss Ephemeris module...");
 
     const SwissEphModule = (await import("./swisseph.js")).default;
 
     log("Initializing Swiss Ephemeris...");
 
-    // ⭐ THIS IS THE ONLY PATH CONFIG NEEDED ⭐
     swe = await SwissEphModule({
       locateFile: file => "./" + file
     });
+
+    /* ⭐⭐⭐ CRITICAL FIX ⭐⭐⭐ */
+    // If files in root
+    swe.swe_set_ephe_path(".");
+
+    // If files inside ephe folder use this instead:
+    // swe.swe_set_ephe_path("./ephe");
 
     SWE_READY = true;
     log("✅ Swiss Ephemeris Ready");
@@ -69,24 +76,23 @@ function degToSign(deg){
 }
 
 /* ===================================================
-🪐 PLANET CALCULATION (REAL SWISS CALL)
+🪐 PLANET CALCULATION
 =================================================== */
 function calculatePlanets(JD){
 
-  log("Applying Lahiri Ayanamsa...");
   swe.set_sid_mode(swe.SE_SIDM_LAHIRI,0,0);
 
   const ayan = swe.get_ayanamsa_ut(JD);
-  log("Ayanamsa loaded");
 
-  log("Calculating Sun...");
-  const sun  = swe.calc_ut(JD, swe.SE_SUN, swe.SEFLG_SWIEPH).longitude;
+  const sunRes  = swe.calc_ut(JD, swe.SE_SUN, swe.SEFLG_SWIEPH);
+  const moonRes = swe.calc_ut(JD, swe.SE_MOON, swe.SEFLG_SWIEPH);
 
-  log("Calculating Moon...");
-  const moon = swe.calc_ut(JD, swe.SE_MOON, swe.SEFLG_SWIEPH).longitude;
+  if(!sunRes || !moonRes){
+    throw new Error("Planet calculation failed");
+  }
 
-  const sunSid  = norm360(sun  - ayan);
-  const moonSid = norm360(moon - ayan);
+  const sunSid  = norm360(sunRes.longitude  - ayan);
+  const moonSid = norm360(moonRes.longitude - ayan);
 
   return {
     JulianDay: JD.toFixed(6),
@@ -122,15 +128,19 @@ async function generateChart(){
     return;
   }
 
-  log("\n🚀 Starting calculation...");
+  try{
 
-  const JD = getJulianDay(dob,tob);
-  log("Julian Day calculated");
+    log("\n🚀 Starting calculation...");
 
-  const result = calculatePlanets(JD);
+    const JD = getJulianDay(dob,tob);
 
-  log("\n✅ Calculation Complete");
-  logBox.textContent = JSON.stringify(result,null,2);
+    const result = calculatePlanets(JD);
+
+    logBox.textContent = JSON.stringify(result,null,2);
+
+  }catch(err){
+    logBox.textContent = "❌ Calculation error:\n" + err;
+  }
 }
 
 /* ===================================================
