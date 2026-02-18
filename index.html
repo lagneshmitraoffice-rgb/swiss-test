@@ -4,35 +4,10 @@
   <title>LM Swiss Astro Engine</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <style>
-    body{
-      background:#111;
-      color:white;
-      font-family:Arial;
-      padding:25px;
-    }
-    input{
-      padding:8px;
-      margin:6px 0;
-      width:260px;
-    }
-    button{
-      padding:10px;
-      background:#FFC107;
-      border:none;
-      font-weight:bold;
-      cursor:pointer;
-      margin-top:10px;
-    }
-    pre{
-      background:#000;
-      padding:15px;
-      margin-top:20px;
-      color:#00ff9c;
-      white-space:pre-wrap;
-    }
-  </style>
+  <!-- ⭐ EXTERNAL CSS -->
+  <link rel="stylesheet" href="./style.css">
 </head>
+
 <body>
 
 <h2>LM Swiss Ephemeris Engine 🚀</h2>
@@ -65,11 +40,9 @@ let swe = null;
   try {
 
     log("Importing SwissEph module...");
-
     const SwissEphModule = (await import("./swisseph.js")).default;
 
     log("Initializing SwissEph...");
-
     swe = await SwissEphModule({
       locateFile: file => "./" + file
     });
@@ -82,28 +55,20 @@ let swe = null;
   }
 })();
 
-
 /* ================= JULIAN DAY ================= */
 
 function getJulianDay(dob, tob){
-
   const [year,month,day] = dob.split("-").map(Number);
   let [hour,min] = tob.split(":").map(Number);
 
-  // IST → UTC
   hour -= 5;
   min  -= 30;
-
   if(min < 0){ min += 60; hour -= 1; }
   if(hour < 0){ hour += 24; }
 
   let Y = year;
   let M = month;
-
-  if(M <= 2){
-    Y -= 1;
-    M += 12;
-  }
+  if(M <= 2){ Y -= 1; M += 12; }
 
   const A = Math.floor(Y/100);
   const B = 2 - A + Math.floor(A/4);
@@ -113,7 +78,6 @@ function getJulianDay(dob, tob){
       + day + B - 1524.5
       + (hour + min/60)/24;
 }
-
 
 /* ================= HELPERS ================= */
 
@@ -130,7 +94,6 @@ function degToSign(deg){
   ];
   return signs[Math.floor(deg/30)] + " " + (deg%30).toFixed(2) + "°";
 }
-
 
 /* ================= GENERATE ================= */
 
