@@ -47,6 +47,9 @@ let swe = null;
       locateFile: file => "./" + file
     });
 
+    // ⭐⭐ THIS LINE WAS MISSING ⭐⭐
+    swe.swe_set_ephe_path(".");
+
     log("✅ Swiss Ephemeris Loaded Successfully");
 
   } catch(err){
