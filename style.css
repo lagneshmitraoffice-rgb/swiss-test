@@ -1,0 +1,118 @@
+/* ===============================
+   GLOBAL
+=============================== */
+
+body{
+  margin:0;
+  background:#0e0e0e;
+  font-family:Arial, Helvetica, sans-serif;
+  color:white;
+}
+
+/* ===============================
+   PAGE CONTAINER
+=============================== */
+
+.wrapper{
+  max-width:900px;
+  margin:auto;
+  padding:40px 20px;
+}
+
+h1{
+  color:#FFC107;
+  margin-bottom:30px;
+  letter-spacing:1px;
+}
+
+/* ===============================
+   CARD UI
+=============================== */
+
+.card{
+  background:#161616;
+  padding:25px;
+  border-radius:12px;
+  box-shadow:0 0 30px rgba(255,193,7,.15);
+}
+
+/* ===============================
+   FORM
+=============================== */
+
+.form-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:15px;
+}
+
+label{
+  font-size:12px;
+  color:#aaa;
+}
+
+input{
+  width:100%;
+  padding:10px;
+  border:none;
+  border-radius:6px;
+  background:#0d0d0d;
+  color:white;
+}
+
+input:focus{
+  outline:1px solid #FFC107;
+}
+
+/* FULL WIDTH FIELD */
+.full{
+  grid-column:1 / span 2;
+}
+
+/* ===============================
+   BUTTON
+=============================== */
+
+button{
+  width:100%;
+  padding:14px;
+  border:none;
+  border-radius:8px;
+  background:#FFC107;
+  font-weight:bold;
+  cursor:pointer;
+  margin-top:10px;
+  transition:.2s;
+}
+
+button:hover{
+  transform:scale(1.03);
+  background:#ffd54f;
+}
+
+/* ===============================
+   RESULT BOX
+=============================== */
+
+.result{
+  margin-top:30px;
+  background:#000;
+  padding:20px;
+  border-radius:10px;
+  box-shadow:0 0 25px rgba(0,255,157,.2);
+}
+
+pre{
+  color:#00ff9c;
+  white-space:pre-wrap;
+  font-size:14px;
+}
+
+/* ===============================
+   LOADING TEXT
+=============================== */
+
+.loading{
+  color:#888;
+  font-style:italic;
+}
