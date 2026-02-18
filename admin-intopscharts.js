@@ -2,43 +2,9 @@ console.log("LM ASTRO ENGINE BOOTING 🚀");
 
 let swe = null;
 let SWE_READY = false;
-let EPHE_PATH = null;
 
 /* ===================================================
-🔎 AUTO DETECT EPHE FILES LOCATION
-=================================================== */
-async function detectEphePath(){
-
-  const testFiles = [
-    "sepl_18.se1",
-    "semo_18.se1",
-    "seas_18.se1"
-  ];
-
-  // check ROOT
-  try{
-    const res = await fetch("./" + testFiles[0]);
-    if(res.ok){
-      console.log("Ephemeris found in ROOT");
-      return ".";
-    }
-  }catch(e){}
-
-  // check /ephe folder
-  try{
-    const res = await fetch("./ephe/" + testFiles[0]);
-    if(res.ok){
-      console.log("Ephemeris found in /ephe folder");
-      return "./ephe";
-    }
-  }catch(e){}
-
-  throw new Error("Ephemeris files NOT FOUND in root or /ephe folder");
-}
-
-
-/* ===================================================
-⏳ LOAD SWISS EPHEMERIS
+⏳ LOAD SWISS EPHEMERIS (VERCEL SAFE)
 =================================================== */
 async function loadSwiss(){
 
@@ -47,26 +13,32 @@ async function loadSwiss(){
 
   try{
 
-    log("Detecting ephemeris files...");
-    EPHE_PATH = await detectEphePath();
-    log("Ephemeris path: " + EPHE_PATH);
+    box.textContent = "🔄 Loading Swiss Ephemeris...";
 
-    log("Importing Swiss Ephemeris module...");
+    // ⭐ Absolute base URL (critical for Vercel)
+    const BASE_URL = window.location.origin + "/";
+
+    log("Base URL: " + BASE_URL);
+
     const SwissEphModule = (await import("./swisseph.js")).default;
 
-    log("Initializing Swiss Ephemeris...");
     swe = await SwissEphModule({
-      locateFile: file => "./" + file
+      locateFile: file => BASE_URL + file
     });
 
-    // ⭐ SET PATH AUTOMATICALLY
+    // ⭐ Absolute ephemeris path
+    const EPHE_PATH = BASE_URL + "ephe";
+
     swe.swe_set_ephe_path(EPHE_PATH);
+
+    log("Ephemeris path set to: " + EPHE_PATH);
 
     SWE_READY = true;
     log("✅ Swiss Ephemeris Ready");
 
   }catch(err){
     box.textContent = "❌ Swiss load failed:\n" + err;
+    console.error(err);
   }
 }
 
@@ -125,7 +97,7 @@ function calculatePlanets(JD){
   const moonRes = swe.calc_ut(JD, swe.SE_MOON, swe.SEFLG_SWIEPH);
 
   if(!sunRes || !moonRes){
-    throw new Error("Planet calculation failed → ephemeris missing");
+    throw new Error("Planet calculation failed (ephemeris missing)");
   }
 
   const sunSid  = norm360(sunRes.longitude  - ayan);
@@ -179,6 +151,7 @@ async function generateChart(){
 
   }catch(err){
     box.textContent = "❌ Calculation error:\n" + err;
+    console.error(err);
   }
 }
 
