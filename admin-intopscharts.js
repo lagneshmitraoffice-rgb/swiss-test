@@ -4,7 +4,7 @@ let swe = null;
 let SWE_READY = false;
 
 /* ===================================================
-⏳ LOAD SWISS EPHEMERIS (VERCEL SAFE)
+⏳ LOAD SWISS EPHEMERIS (VERCEL + WASM FINAL)
 =================================================== */
 async function loadSwiss(){
 
@@ -15,23 +15,41 @@ async function loadSwiss(){
 
     box.textContent = "🔄 Loading Swiss Ephemeris...";
 
-    // ⭐ Absolute base URL (critical for Vercel)
     const BASE_URL = window.location.origin + "/";
 
-    log("Base URL: " + BASE_URL);
-
+    log("Importing SwissEph module...");
     const SwissEphModule = (await import("./swisseph.js")).default;
 
     swe = await SwissEphModule({
       locateFile: file => BASE_URL + file
     });
 
-    // ⭐ Absolute ephemeris path
-    const EPHE_PATH = BASE_URL + "ephe";
+    log("Mounting ephemeris files into WASM FS...");
 
-    swe.swe_set_ephe_path(EPHE_PATH);
+    // ⭐ REQUIRED SWISS FILES
+    const files = [
+      "sepl_18.se1",
+      "semo_18.se1",
+      "seas_18.se1",
+      "sefstars.txt",
+      "seasnam.txt",
+      "seorbel.txt"
+    ];
 
-    log("Ephemeris path set to: " + EPHE_PATH);
+    // create virtual ephemeris folder
+    swe.FS.mkdir("/ephe");
+
+    // download + mount each file into Swiss virtual filesystem
+    for(const file of files){
+      log("Fetching " + file + "...");
+      const res = await fetch(BASE_URL + "ephe/" + file);
+      const buffer = await res.arrayBuffer();
+      swe.FS.writeFile("/ephe/" + file, new Uint8Array(buffer));
+      log(file + " mounted");
+    }
+
+    // tell Swiss where ephemeris lives
+    swe.swe_set_ephe_path("/ephe");
 
     SWE_READY = true;
     log("✅ Swiss Ephemeris Ready");
@@ -51,6 +69,7 @@ function getJulianDay(dob,tob){
   const [year,month,day] = dob.split("-").map(Number);
   let [hour,min] = tob.split(":").map(Number);
 
+  // IST → UTC conversion
   hour -= 5;
   min  -= 30;
 
@@ -141,7 +160,6 @@ async function generateChart(){
   }
 
   try{
-
     box.textContent = "🚀 Starting calculation...";
 
     const JD = getJulianDay(dob,tob);
