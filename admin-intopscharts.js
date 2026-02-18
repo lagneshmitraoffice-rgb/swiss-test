@@ -2,13 +2,13 @@ console.log("LM ASTRO ENGINE UI READY 🚀");
 
 const box = document.getElementById("resultBox");
 
-/* ================= CREATE WORKER ================= */
+/* ================= WORKER ================= */
 
 const worker = new Worker("./swissWorker.js", { type: "module" });
 
 box.textContent = "🔄 Booting Astro Engine...";
 
-/* ================= INIT ENGINE ================= */
+/* ================= INIT ================= */
 
 worker.postMessage({ type: "init" });
 
@@ -27,7 +27,7 @@ worker.onmessage = (e) => {
   }
 };
 
-/* ================= GENERATE BUTTON ================= */
+/* ================= GENERATE ================= */
 
 document.getElementById("generateBtn").onclick = () => {
 
@@ -40,5 +40,11 @@ document.getElementById("generateBtn").onclick = () => {
   }
 
   box.textContent = "🔮 Calculating chart...";
-  worker.postMessage({ type: "calc", dob, tob });
+
+  worker.postMessage({
+    type: "calc",
+    dob,
+    tob
+  });
+
 };
