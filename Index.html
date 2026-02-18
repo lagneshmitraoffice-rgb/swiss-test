@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Swiss Test</title>
+</head>
+
+<body style="font-family:monospace">
+<h1>Swiss Ephemeris Boot Test</h1>
+<div id="log">Booting...</div>
+
+<script src="./swisseph.js"></script>
+
+<script>
+const log = msg => document.getElementById("log").innerHTML += "<br>" + msg;
+
+async function bootSwiss(){
+  try{
+    log("Creating SwissEph instance...");
+
+    const swe = new SwissEph();
+
+    log("Calling initSwissEph...");
+
+    await swe.initSwissEph({
+      locateFile: file => "./" + file
+    });
+
+    log("✅ SWISS EPHEMERIS FULLY LOADED");
+
+  }catch(err){
+    log("❌ ERROR:");
+    log(err);
+    console.error(err);
+  }
+}
+
+bootSwiss();
+</script>
+
+</body>
+</html>
