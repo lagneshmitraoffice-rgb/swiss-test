@@ -1,42 +1,75 @@
 console.log("LM ASTRO ENGINE BOOTING 🚀");
 
-const logBox = document.getElementById("log");
-const log = msg => logBox.textContent += "\n" + msg;
-
 let swe = null;
 let SWE_READY = false;
+let EPHE_PATH = null;
+
+/* ===================================================
+🔎 AUTO DETECT EPHE FILES LOCATION
+=================================================== */
+async function detectEphePath(){
+
+  const testFiles = [
+    "sepl_18.se1",
+    "semo_18.se1",
+    "seas_18.se1"
+  ];
+
+  // check ROOT
+  try{
+    const res = await fetch("./" + testFiles[0]);
+    if(res.ok){
+      console.log("Ephemeris found in ROOT");
+      return ".";
+    }
+  }catch(e){}
+
+  // check /ephe folder
+  try{
+    const res = await fetch("./ephe/" + testFiles[0]);
+    if(res.ok){
+      console.log("Ephemeris found in /ephe folder");
+      return "./ephe";
+    }
+  }catch(e){}
+
+  throw new Error("Ephemeris files NOT FOUND in root or /ephe folder");
+}
+
 
 /* ===================================================
 ⏳ LOAD SWISS EPHEMERIS
 =================================================== */
 async function loadSwiss(){
+
+  const box = document.getElementById("resultBox");
+  const log = msg => box.textContent += "\n" + msg;
+
   try{
 
-    log("Importing Swiss Ephemeris module...");
+    log("Detecting ephemeris files...");
+    EPHE_PATH = await detectEphePath();
+    log("Ephemeris path: " + EPHE_PATH);
 
+    log("Importing Swiss Ephemeris module...");
     const SwissEphModule = (await import("./swisseph.js")).default;
 
     log("Initializing Swiss Ephemeris...");
-
     swe = await SwissEphModule({
       locateFile: file => "./" + file
     });
 
-    /* ⭐⭐⭐ CRITICAL FIX ⭐⭐⭐ */
-    // If files in root
-    swe.swe_set_ephe_path(".");
-
-    // If files inside ephe folder use this instead:
-    // swe.swe_set_ephe_path("./ephe");
+    // ⭐ SET PATH AUTOMATICALLY
+    swe.swe_set_ephe_path(EPHE_PATH);
 
     SWE_READY = true;
     log("✅ Swiss Ephemeris Ready");
 
   }catch(err){
-    log("❌ Swiss load failed:");
-    log(err);
+    box.textContent = "❌ Swiss load failed:\n" + err;
   }
 }
+
 
 /* ===================================================
 📅 JULIAN DAY (IST → UTC)
@@ -64,16 +97,20 @@ function getJulianDay(dob,tob){
       + (hour+min/60)/24;
 }
 
+
 /* ===================================================
 🌌 HELPERS
 =================================================== */
 function norm360(x){ x%=360; if(x<0)x+=360; return x; }
 
 function degToSign(deg){
-  const s=["Aries","Taurus","Gemini","Cancer","Leo","Virgo",
-           "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"];
+  const s=[
+    "Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+    "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"
+  ];
   return s[Math.floor(deg/30)]+" "+(deg%30).toFixed(2)+"°";
 }
+
 
 /* ===================================================
 🪐 PLANET CALCULATION
@@ -88,7 +125,7 @@ function calculatePlanets(JD){
   const moonRes = swe.calc_ut(JD, swe.SE_MOON, swe.SEFLG_SWIEPH);
 
   if(!sunRes || !moonRes){
-    throw new Error("Planet calculation failed");
+    throw new Error("Planet calculation failed → ephemeris missing");
   }
 
   const sunSid  = norm360(sunRes.longitude  - ayan);
@@ -110,10 +147,13 @@ function calculatePlanets(JD){
   };
 }
 
+
 /* ===================================================
 🔥 GENERATE BUTTON
 =================================================== */
 async function generateChart(){
+
+  const box = document.getElementById("resultBox");
 
   if(!SWE_READY){
     alert("Swiss still loading...");
@@ -130,18 +170,18 @@ async function generateChart(){
 
   try{
 
-    log("\n🚀 Starting calculation...");
+    box.textContent = "🚀 Starting calculation...";
 
     const JD = getJulianDay(dob,tob);
-
     const result = calculatePlanets(JD);
 
-    logBox.textContent = JSON.stringify(result,null,2);
+    box.textContent = JSON.stringify(result,null,2);
 
   }catch(err){
-    logBox.textContent = "❌ Calculation error:\n" + err;
+    box.textContent = "❌ Calculation error:\n" + err;
   }
 }
+
 
 /* ===================================================
 🚀 APP START
