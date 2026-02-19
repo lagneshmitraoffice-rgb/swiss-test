@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>ZODIAC INTERPRETATION ENGINE – PROTOTYPE</title>
+<style>
+body{
+  font-family: Arial;
+  background:#111;
+  color:#fff;
+  text-align:center;
+}
+input{
+  padding:8px;
+  margin:6px;
+  width:60px;
+  text-align:center;
+  font-size:16px;
+}
+button{
+  padding:10px 20px;
+  font-size:18px;
+  background:#00ffa6;
+  border:none;
+  cursor:pointer;
+}
+#result{
+  margin-top:30px;
+  width:70%;
+  margin-left:auto;
+  margin-right:auto;
+  text-align:left;
+  background:#1c1c1c;
+  padding:20px;
+  border-radius:10px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>✨ Chart Interpretation Prototype</h1>
+
+<p>Enter Ascendant (center number) then enter planets house numbers</p>
+
+<h2>Lagna</h2>
+<input id="lagna" placeholder="La">
+
+<h2>Planets House Numbers</h2>
+Sun <input id="sun">
+Moon <input id="moon">
+Mars <input id="mars">
+Mercury <input id="mercury">
+Jupiter <input id="jupiter">
+Venus <input id="venus">
+Saturn <input id="saturn">
+Rahu <input id="rahu">
+Ketu <input id="ketu">
+
+<br><br>
+<button onclick="interpret()">Generate Reading</button>
+
+<div id="result"></div>
+
+<script>
+
+function interpret(){
+
+  const lagna = Number(document.getElementById("lagna").value);
+
+  const planets={
+    Sun:Number(document.getElementById("sun").value),
+    Moon:Number(document.getElementById("moon").value),
+    Mars:Number(document.getElementById("mars").value),
+    Mercury:Number(document.getElementById("mercury").value),
+    Jupiter:Number(document.getElementById("jupiter").value),
+    Venus:Number(document.getElementById("venus").value),
+    Saturn:Number(document.getElementById("saturn").value),
+    Rahu:Number(document.getElementById("rahu").value),
+    Ketu:Number(document.getElementById("ketu").value)
+  };
+
+  let personality="";
+  let career="";
+  let love="";
+  let strengths="";
+  let challenges="";
+
+  // 🌞 SUN LOGIC (career drive)
+  if(planets.Sun==10) career+="Strong leadership career potential.<br>";
+  if(planets.Sun==1) personality+="Natural authority and confidence.<br>";
+
+  // 🌙 MOON LOGIC (emotions)
+  if(planets.Moon==4) personality+="Emotionally sensitive and home loving.<br>";
+  if(planets.Moon==6) challenges+="Overthinking and anxiety tendencies.<br>";
+
+  // 🔥 MARS LOGIC (energy)
+  if(planets.Mars==7) love+="Passionate relationships and strong attraction.<br>";
+  if(planets.Mars==6) strengths+="Competitive and hardworking nature.<br>";
+
+  // 💫 JUPITER LOGIC (luck)
+  if(planets.Jupiter==9) strengths+="Strong luck and protection in life.<br>";
+  if(planets.Jupiter==10) career+="High career growth and recognition.<br>";
+
+  // 💕 VENUS LOGIC (love)
+  if(planets.Venus==7) love+="Romantic and relationship oriented.<br>";
+  if(planets.Venus==11) strengths+="Social charm and popularity.<br>";
+
+  // 🪐 SATURN LOGIC (karma)
+  if(planets.Saturn==10) career+="Slow but powerful career success.<br>";
+  if(planets.Saturn==7) challenges+="Delay in marriage or relationships.<br>";
+
+  // ☊ RAHU LOGIC (obsession)
+  if(planets.Rahu==10) career+="Huge ambition and fame desire.<br>";
+  if(planets.Rahu==7) love+="Unusual or karmic relationships.<br>";
+
+  // ☋ KETU LOGIC (detachment)
+  if(planets.Ketu==4) challenges+="Emotional detachment from home.<br>";
+  if(planets.Ketu==1) personality+="Spiritual personality and introspection.<br>";
+
+  document.getElementById("result").innerHTML = `
+  <h2>🧠 Personality</h2>${personality || "Balanced personality."}
+  <h2>💼 Career</h2>${career || "Stable career path."}
+  <h2>❤️ Relationships</h2>${love || "Normal relationship life."}
+  <h2>💪 Strengths</h2>${strengths || "General strengths."}
+  <h2>⚠️ Challenges</h2>${challenges || "No major challenges."}
+  `;
+}
+
+</script>
+
+</body>
+</html>
