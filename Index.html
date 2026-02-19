@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html>
-
 <head>
   <meta charset="UTF-8">
   <title>Swiss Ephemeris Boot Test</title>
@@ -11,61 +10,50 @@
 <h1>🚀 Swiss Ephemeris Boot Test</h1>
 <div id="log">Booting...</div>
 
-<!-- ===================================================
-SWISS EPHEMERIS JS
-File must be in same folder
-=================================================== -->
-<script src="./swisseph.js"></script>
-
-<script>
+<script type="module">
 
 const logBox = document.getElementById("log");
-
-function log(msg){
+const log = msg => {
   logBox.innerHTML += "<br>" + msg;
   console.log(msg);
-}
+};
 
 async function bootSwiss(){
 
   try{
 
-    log("📦 Creating SwissEph instance...");
+    log("Importing Swiss module...");
 
-    // create instance
-    const swe = new SwissEph();
+    const SwissModule = (await import("./swisseph.js")).default;
 
-    log("📂 Loading WASM + ephemeris files...");
+    log("Creating Swiss instance...");
 
-    // load wasm + ephe files
-    await swe.initSwissEph({
+    const swe = await SwissModule({
       locateFile: file => "./" + file
     });
 
-    log("🧪 Running test calculation...");
+    log("Running test calculation...");
 
-    // Julian Day for 1 Jan 2000
     const jd = swe.swe_julday(
       2000, 1, 1, 0,
       swe.SE_GREG_CAL
     );
 
-    // calculate Sun
     const res = swe.swe_calc_ut(
       jd,
       swe.SE_SUN,
       swe.SEFLG_SWIEPH
     );
 
-    log("🌞 Sun longitude = " + res.longitude.toFixed(6) + "°");
+    log("Sun longitude = " + res.longitude.toFixed(6) + "°");
 
-    log("🎉 SUCCESS — Swiss Ephemeris Fully Working");
+    log("🎉 SUCCESS — Swiss Loaded");
 
   }
   catch(err){
 
-    log("❌ ERROR OCCURRED:");
-    log(err);
+    log("❌ ERROR:");
+    log(err.message);
     console.error(err);
 
   }
