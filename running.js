@@ -31,7 +31,6 @@ async function preprocessImage(file){
 
   canvas.width  = img.width * 3;
   canvas.height = img.height * 3;
-
   ctx.drawImage(img,0,0,canvas.width,canvas.height);
 
   const imageData = ctx.getImageData(0,0,canvas.width,canvas.height);
@@ -49,7 +48,7 @@ async function preprocessImage(file){
 
 /* ===================================================
 LETTER MERGE ENGINE
-Fixes OCR broken letters like M O → MO
+Fix broken OCR letters like M O → MO
 =================================================== */
 function mergeNearbyLetters(words){
 
@@ -117,6 +116,7 @@ function extractByPositions(words){
 
     const text=w.text;
 
+    // Sign numbers
     if(/^(1[0-2]|[1-9])$/.test(text)){
       signs.push({sign:parseInt(text),x:w.x,y:w.y});
       return;
@@ -124,6 +124,7 @@ function extractByPositions(words){
 
     if(text.length>4) return;
 
+    // Planet detection
     if(PLANET_MAP[text]){
       planets.push({planet:PLANET_MAP[text],x:w.x,y:w.y});
     }
@@ -155,13 +156,12 @@ function extractByPositions(words){
   });
 
   /* ===================================================
-  ⭐ SMART LAGNA DETECTION (GEOMETRY FIX)
-  Lagna = LEFT MIDDLE diamond in North chart
+  ⭐ SMART LAGNA DETECTION
+  Lagna = LEFT MIDDLE diamond (North Indian chart)
   =================================================== */
   let lagnaSign=null;
 
   if(signs.length){
-
     const avgY = signs.reduce((sum,s)=>sum+s.y,0) / signs.length;
 
     const middleBand = signs.filter(s =>
@@ -208,7 +208,7 @@ function extractByPositions(words){
 }
 
 /* ===================================================
-PUBLIC FUNCTION (FIXES ERROR)
+PUBLIC FUNCTION
 =================================================== */
 window.extractChartFromImage = async function(file){
 
