@@ -1,4 +1,4 @@
-console.log("📸 Chart Extractor Engine Running (POSITION MODE)");
+console.log("📸 Chart Extractor Engine Running (POSITION MODE v1)");
 
 /* ===================================================
 INIT OCR WORKER (HIGH ACCURACY MODE)
@@ -19,7 +19,7 @@ async function initOCR(){
 }
 
 /* ===================================================
-🧠 IMAGE UPSCALE + BINARIZE
+🧠 IMAGE UPSCALE + BINARIZE (OCR BOOST)
 =================================================== */
 async function preprocessImage(file){
 
@@ -34,9 +34,10 @@ async function preprocessImage(file){
   const imageData = ctx.getImageData(0,0,canvas.width,canvas.height);
   const data = imageData.data;
 
+  // High contrast B/W conversion
   for(let i=0;i<data.length;i+=4){
     const avg = (data[i]+data[i+1]+data[i+2])/3;
-    const val = avg>140 ? 255 : 0;
+    const val = avg > 140 ? 255 : 0;
     data[i]=data[i+1]=data[i+2]=val;
   }
 
@@ -45,7 +46,7 @@ async function preprocessImage(file){
 }
 
 /* ===================================================
-🚀 MAIN EXTRACT FUNCTION (POSITION BASED)
+🚀 MAIN EXTRACT FUNCTION
 =================================================== */
 window.extractChartFromImage = async function(file){
 
@@ -56,16 +57,14 @@ window.extractChartFromImage = async function(file){
   console.log("🔍 Running OCR WORD MODE...");
   const { data } = await ocrWorker.recognize(canvas);
 
-  console.log("📦 WORD BLOCKS:", data.words);
+  console.log("📦 OCR WORD BLOCKS:", data.words);
 
-  const gridResult = extractByPositions(data.words);
-
-  return gridResult;
+  return extractByPositions(data.words);
 };
 
 /* ===================================================
-🔥 CORE BREAKTHROUGH ENGINE
-IMAGE → WORD POSITIONS → HOUSE MAP
+🔥 CORE POSITION ENGINE
+WORD POSITIONS → PLANET → HOUSE
 =================================================== */
 function extractByPositions(words){
 
@@ -76,15 +75,17 @@ function extractByPositions(words){
     S:"Saturn", M:"Moon", V:"Venus", J:"Jupiter"
   };
 
-  const houseNumbers = [];
-  const planetWords  = [];
+  let houseNumbers = [];
+  let planetWords  = [];
 
-  // STEP 1 → Separate numbers & planets
+  /* ===================================================
+  STEP 1 → SEPARATE HOUSE NUMBERS & PLANETS
+  =================================================== */
   words.forEach(w => {
 
     const text = w.text.toUpperCase().trim();
 
-    // detect house numbers
+    // detect house numbers 1–12
     if(/^(1[0-2]|[1-9])$/.test(text)){
       houseNumbers.push({
         house: parseInt(text),
@@ -93,7 +94,7 @@ function extractByPositions(words){
       });
     }
 
-    // detect planets
+    // detect planet codes
     Object.keys(PLANET_MAP).forEach(code=>{
       if(text === code){
         planetWords.push({
@@ -112,16 +113,14 @@ function extractByPositions(words){
   /* ===================================================
   STEP 2 → FIND NEAREST HOUSE FOR EACH PLANET
   =================================================== */
-
   const result = { houses:{}, planets:{} };
 
   planetWords.forEach(p => {
 
     let closestHouse = null;
-    let minDist = 999999;
+    let minDist = Infinity;
 
     houseNumbers.forEach(h => {
-
       const dx = p.x - h.x;
       const dy = p.y - h.y;
       const dist = Math.sqrt(dx*dx + dy*dy);
@@ -132,7 +131,7 @@ function extractByPositions(words){
       }
     });
 
-    if(closestHouse){
+    if(closestHouse !== null){
       if(!result.houses[closestHouse])
         result.houses[closestHouse] = [];
 
@@ -142,8 +141,18 @@ function extractByPositions(words){
 
   });
 
+  /* ===================================================
+  STEP 3 → SORT HOUSES NUMERICALLY (CLEAN OUTPUT)
+  =================================================== */
+  const sortedHouses = {};
+  Object.keys(result.houses)
+    .sort((a,b)=>a-b)
+    .forEach(h=>{
+      sortedHouses[h] = result.houses[h];
+    });
+
   return {
-    extractedHouses: result.houses,
+    extractedHouses: sortedHouses,
     planetMapping: result.planets,
     detectedHouseCount: houseNumbers.length,
     detectedPlanetCount: planetWords.length
