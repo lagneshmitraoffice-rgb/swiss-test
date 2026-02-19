@@ -1,4 +1,4 @@
-console.log("📸 Chart Extractor Engine Running (ZONE MATCH ENGINE - STABLE)");
+console.log("📸 Chart Extractor Engine Running (ZONE MATCH ENGINE FINAL)");
 
 let ocrWorker = null;
 
@@ -21,7 +21,7 @@ async function initOCR(){
 }
 
 /* ===================================================
-IMAGE PREPROCESS
+IMAGE PREPROCESS (UPSCALE + B/W)
 =================================================== */
 async function preprocessImage(file){
 
@@ -48,7 +48,7 @@ async function preprocessImage(file){
 }
 
 /* ===================================================
-MERGE BROKEN OCR LETTERS (M O → MO)
+MERGE BROKEN OCR LETTERS  (M O -> MO)
 =================================================== */
 function mergeNearbyLetters(words){
 
@@ -86,7 +86,7 @@ function mergeNearbyLetters(words){
 }
 
 /* ===================================================
-🔥 CORE ENGINE (ZONE BASED MATCH - SAFE)
+🔥 CORE ENGINE (ZONE MATCH)
 =================================================== */
 function extractByPositions(words){
 
@@ -116,6 +116,7 @@ function extractByPositions(words){
 
     const text=w.text;
 
+    // numbers = zodiac signs
     if(/^(1[0-2]|[1-9])$/.test(text)){
       numbers.push({num:parseInt(text),x:w.x,y:w.y});
       return;
@@ -129,19 +130,10 @@ function extractByPositions(words){
 
   });
 
-  if(!numbers.length){
-    return {
-      error:"No sign numbers detected",
-      extractedHouses:{},
-      planetMapping:{}
-    };
-  }
-
   /* ===============================
-  CREATE ZONES AROUND NUMBERS
+  CREATE ZONES AROUND SIGN NUMBERS
   =============================== */
   const ZONE_SIZE = 140;
-
   const signToPlanets={};
 
   numbers.forEach(n=>{
@@ -168,27 +160,20 @@ function extractByPositions(words){
   });
 
   /* ===============================
-  SAFE LAGNA DETECTION
+  SMART LAGNA DETECTION
   =============================== */
   let lagnaSign=null;
 
-  const avgY = numbers.reduce((s,n)=>s+n.y,0)/numbers.length;
-  const mid = numbers.filter(n=>Math.abs(n.y-avgY)<120);
-
-  if(mid.length){
-    lagnaSign = mid.sort((a,b)=>a.x-b.x)[0].num;
-  }
-
-  if(!lagnaSign){
-    lagnaSign = numbers.sort((a,b)=>a.x-b.x)[0].num;
-  }
-
-  if(!lagnaSign){
-    lagnaSign = numbers.sort((a,b)=>a.y-b.y)[0].num;
+  if(numbers.length){
+    const avgY = numbers.reduce((s,n)=>s+n.y,0)/numbers.length;
+    const mid  = numbers.filter(n=>Math.abs(n.y-avgY)<120);
+    if(mid.length){
+      lagnaSign = mid.sort((a,b)=>a.x-b.x)[0].num;
+    }
   }
 
   /* ===============================
-  SIGN → HOUSE CONVERSION
+  SIGN → HOUSE CONVERSION (SAFE)
   =============================== */
   const finalHouses={};
   const finalPlanets={};
@@ -196,6 +181,11 @@ function extractByPositions(words){
   Object.keys(signToPlanets).forEach(signKey=>{
 
     const sign = parseInt(signKey);
+
+    // 🛡️ CRASH PROTECTION
+    if(!signToPlanets[sign] || !signToPlanets[sign].length)
+      return;
+
     const house = (sign - lagnaSign + 12)%12 + 1;
 
     signToPlanets[sign].forEach(planet=>{
@@ -216,19 +206,9 @@ function extractByPositions(words){
 
   });
 
-  /* ===============================
-  SORT HOUSES
-  =============================== */
-  const sortedHouses={};
-  Object.keys(finalHouses)
-    .sort((a,b)=>a-b)
-    .forEach(h=>{
-      sortedHouses[h]=finalHouses[h];
-    });
-
   return{
     LagnaSign:SIGN_NAMES[lagnaSign],
-    extractedHouses:sortedHouses,
+    extractedHouses:finalHouses,
     planetMapping:finalPlanets,
     detectedSigns:numbers.length,
     detectedPlanets:Object.keys(finalPlanets).length
@@ -236,7 +216,7 @@ function extractByPositions(words){
 }
 
 /* ===================================================
-PUBLIC FUNCTION
+PUBLIC FUNCTION (USED BY HTML)
 =================================================== */
 window.extractChartFromImage = async function(file){
 
