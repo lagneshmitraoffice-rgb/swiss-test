@@ -1,96 +1,100 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>LM Swiss Astro Engine</title>
+  <title>LM Astro Engine</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="./style.css">
+
+  <!-- OCR -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="./running.js"></script>
 </head>
 
 <body>
 
-<h2>LM Swiss Ephemeris Engine 🚀</h2>
+<h2>LM Astro Engine 🚀</h2>
 
-<input id="name" placeholder="Full Name"><br>
-
-<label>DOB</label><br>
-<input id="dob" type="date"><br>
-
-<label>TOB</label><br>
-<input id="tob" type="time"><br>
-
-<input id="pob" placeholder="Place of Birth"><br>
-<input id="country" placeholder="Country"><br>
-
-<button id="generateBtn">Generate Chart</button>
+<button id="openToolsBtn">⚙️ Open Tools</button>
 
 <pre id="resultBox">🔄 Booting Astro Engine...</pre>
 
-<script type="module">
+<!-- ===================================================
+🧰 TOOL PANEL (POPUP)
+=================================================== -->
+<div id="toolPanel" class="panelHidden">
 
-console.log("LM ASTRO ENGINE UI READY 🚀");
+  <h3>Choose Tool</h3>
+
+  <button id="chartBtn">🪐 Generate Birth Chart</button>
+
+  <hr>
+
+  <input type="file" id="chartImageInput" accept="image/*">
+  <button id="extractBtn">📸 Extract Chart Data</button>
+
+  <br><br>
+  <button id="closePanel">Close</button>
+
+</div>
+
+<script type="module">
+console.log("UI READY");
 
 const box = document.getElementById("resultBox");
 
-/* ===================================================
-🧠 CREATE SWISS WORKER
-=================================================== */
+/* ================= PANEL CONTROL ================= */
 
-// ⭐ file name EXACT same hona chahiye → swissworker.js
-const worker = new Worker("./swissworker.js", { type: "module" });
+const panel = document.getElementById("toolPanel");
 
-/* ===================================================
-📨 WORKER MESSAGES
-=================================================== */
+document.getElementById("openToolsBtn").onclick = () =>{
+  panel.classList.remove("panelHidden");
+}
 
-worker.onmessage = (e) => {
+document.getElementById("closePanel").onclick = () =>{
+  panel.classList.add("panelHidden");
+}
 
-  if (e.data.type === "ready") {
-    box.textContent = "✅ Swiss Ephemeris Ready";
-  }
+/* ================= SWISS WORKER ================= */
 
-  if (e.data.type === "result") {
-    box.textContent = JSON.stringify(e.data.data, null, 2);
-  }
+const worker = new Worker("./swissworker.js",{ type:"module" });
 
-  if (e.data.type === "error") {
-    box.textContent = "❌ Error:\n" + e.data.message;
-  }
-
-  // ⭐ VERY IMPORTANT → live logs from worker
-  if (e.data.type === "log") {
-    box.textContent += "\n" + e.data.message;
-  }
-
+worker.onmessage = (e)=>{
+  if(e.data.type==="ready") box.textContent="✅ Swiss Ready";
+  if(e.data.type==="result") box.textContent=JSON.stringify(e.data.data,null,2);
+  if(e.data.type==="error") box.textContent="❌ "+e.data.message;
+  if(e.data.type==="log") box.textContent += "\n"+e.data.message;
 };
 
-/* ===================================================
-🚀 INIT ENGINE
-=================================================== */
+worker.postMessage({ type:"init" });
 
-worker.postMessage({ type: "init" });
+/* ================= GENERATE CHART ================= */
 
-/* ===================================================
-🔥 GENERATE BUTTON
-=================================================== */
+document.getElementById("chartBtn").onclick = () =>{
 
-document.getElementById("generateBtn").onclick = () => {
+  const dob = prompt("Enter DOB (YYYY-MM-DD)");
+  const tob = prompt("Enter TOB (HH:MM)");
 
-  const dob = document.getElementById("dob").value;
-  const tob = document.getElementById("tob").value;
+  if(!dob || !tob) return;
 
-  if (!dob || !tob) {
-    alert("Enter DOB & TOB");
+  box.textContent="🔮 Calculating...";
+  worker.postMessage({ type:"calc", dob, tob });
+};
+
+/* ================= OCR EXTRACTOR ================= */
+
+document.getElementById("extractBtn").onclick = async ()=>{
+
+  const file = document.getElementById("chartImageInput").files[0];
+
+  if(!file){
+    alert("Upload chart image first");
     return;
   }
 
-  box.textContent = "🔮 Calculating chart...";
+  box.textContent="📸 Reading chart...";
+  const result = await window.extractChartFromImage(file);
 
-  worker.postMessage({
-    type: "calc",
-    dob,
-    tob
-  });
-
+  box.textContent = JSON.stringify(result,null,2);
 };
 
 </script>
