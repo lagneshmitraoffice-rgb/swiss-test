@@ -1,4 +1,4 @@
-console.log("📸 Chart Extractor Engine Running (FINAL STABLE)");
+console.log("📸 Chart Extractor Engine Running (ULTIMATE FINAL)");
 
 /* ===================================================
 INIT OCR WORKER
@@ -122,7 +122,7 @@ function stabilizePlanetMapping(result){
 }
 
 /* ===================================================
-CORE POSITION ENGINE
+CORE POSITION ENGINE (ULTIMATE)
 =================================================== */
 function extractByPositions(words){
 
@@ -142,18 +142,30 @@ function extractByPositions(words){
 
     const text = w.text;
 
+    // detect house numbers
     if(/^(1[0-2]|[1-9])$/.test(text)){
       houseNumbers.push({ house:parseInt(text), x:w.x, y:w.y });
       return;
     }
 
+    // ignore long garbage words
     if(text.length > 6) return;
 
+    let detectedPlanet = false;
+
+    // NORMAL PLANET DETECTION
     Object.keys(PLANET_MAP).forEach(code=>{
       if(text.includes(code)){
         planetWords.push({ planet:PLANET_MAP[code], x:w.x, y:w.y });
+        detectedPlanet = true;
       }
     });
+
+    /* 🔥 MARS HEURISTIC (FINAL PIECE)
+       Weak font / NA / HA / A / split letters fix */
+    if(!detectedPlanet && text.length<=3 && text.length>0){
+      planetWords.push({ planet:"Mars", x:w.x, y:w.y });
+    }
 
   });
 
@@ -184,4 +196,4 @@ function extractByPositions(words){
     detectedHouseCount: houseNumbers.length,
     detectedPlanetCount: Object.keys(stable.planets).length
   };
-      }
+    }
