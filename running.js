@@ -34,6 +34,7 @@ async function preprocessImage(file){
   const imageData = ctx.getImageData(0,0,canvas.width,canvas.height);
   const data = imageData.data;
 
+  // strong B/W threshold for OCR
   for(let i=0;i<data.length;i+=4){
     const avg = (data[i]+data[i+1]+data[i+2])/3;
     const val = avg>140 ? 255 : 0;
@@ -57,10 +58,7 @@ window.extractChartFromImage = async function(file){
   console.log("📄 OCR TEXT:");
   console.log(text);
 
-  // 🔥 Step 1 → Try full parser
-  const parsed = parseAstroText(text);
-
-  // 🔥 Step 2 → Always run fallback astro parser
+  const parsed   = parseAstroText(text);
   const fallback = miniAstroParser(text);
 
   return {
@@ -70,7 +68,7 @@ window.extractChartFromImage = async function(file){
 };
 
 /* ===================================================
-🔥 SMART GRID PARSER
+🔥 PARSER 1 — GRID / LINE BASED PARSER
 =================================================== */
 function parseAstroText(rawText){
 
@@ -80,7 +78,6 @@ function parseAstroText(rawText){
     SU:"Sun", MO:"Moon", MA:"Mars", ME:"Mercury",
     JU:"Jupiter", VE:"Venus", SA:"Saturn",
     RA:"Rahu", KE:"Ketu",
-    UR:"Uranus", NE:"Neptune", PL:"Pluto",
     S:"Saturn", M:"Moon", V:"Venus", J:"Jupiter"
   };
 
@@ -93,42 +90,43 @@ function parseAstroText(rawText){
   const lines = text.split("\n").map(l=>l.trim()).filter(Boolean);
   let memoryPlanets = [];
 
-  for(let i=0;i<lines.length;i++){
+  for(let line of lines){
 
-    const line = lines[i];
     const houseMatch = line.match(/\b(1[0-2]|[1-9])\b/);
 
-    const foundPlanets = [];
+    let foundPlanets = [];
     Object.keys(PLANET_MAP).forEach(code=>{
-      if(line.includes(code)){
-        foundPlanets.push(PLANET_MAP[code]);
-      }
+      if(line.includes(code)) foundPlanets.push(PLANET_MAP[code]);
     });
 
-    // same line
-    if(houseMatch && foundPlanets.length>0){
+    // CASE 1 → same line
+    if(houseMatch && foundPlanets.length){
       const house = houseMatch[0];
       if(!result.houses[house]) result.houses[house]=[];
+
       foundPlanets.forEach(p=>{
         result.houses[house].push(p);
-        result.planets[p]="House "+house;
+        result.planets[p] = "House "+house;
       });
       continue;
     }
 
-    // planet line first
-    if(foundPlanets.length>0){
+    // CASE 2 → planet line first
+    if(foundPlanets.length){
       memoryPlanets = foundPlanets;
       continue;
     }
 
-    if(houseMatch && memoryPlanets.length>0){
+    // CASE 3 → house after planets
+    if(houseMatch && memoryPlanets.length){
       const house = houseMatch[0];
       if(!result.houses[house]) result.houses[house]=[];
+
       memoryPlanets.forEach(p=>{
         result.houses[house].push(p);
-        result.planets[p]="House "+house;
+        result.planets[p] = "House "+house;
       });
+
       memoryPlanets=[];
     }
   }
@@ -137,7 +135,8 @@ function parseAstroText(rawText){
 }
 
 /* ===================================================
-🚀 FALLBACK ASTRO PARSER (ALWAYS RETURNS DATA)
+🔥 PARSER 2 — ASTRO FALLBACK (SMART LAGNA + HOUSE CALC)
+This guarantees output even when OCR messy ho.
 =================================================== */
 function miniAstroParser(rawText){
 
@@ -149,12 +148,30 @@ function miniAstroParser(rawText){
     RA:"Rahu", KE:"Ketu"
   };
 
-  // Detect Lagna sign
+  /* ===============================
+  STEP 1 → SMART LAGNA DETECTION
+  =============================== */
   let lagnaSign = null;
-  const lagnaMatch = text.match(/(ASC|LA|LAGNA)\s*(\d{1,2})/);
-  if(lagnaMatch) lagnaSign = parseInt(lagnaMatch[2]);
 
-  // detect first planets found
+  // ASC 6
+  let ascMatch = text.match(/ASC\s*(\d{1,2})/);
+  if(ascMatch) lagnaSign = parseInt(ascMatch[1]);
+
+  // LAGNA 6
+  if(!lagnaSign){
+    let lagnaMatch = text.match(/LAGNA\s*(\d{1,2})/);
+    if(lagnaMatch) lagnaSign = parseInt(lagnaMatch[1]);
+  }
+
+  // fallback → first number in chart
+  if(!lagnaSign){
+    const nums = text.match(/\b(1[0-2]|[1-9])\b/g);
+    if(nums) lagnaSign = parseInt(nums[0]);
+  }
+
+  /* ===============================
+  STEP 2 → FIND PLANETS
+  =============================== */
   let planetsFound = [];
   Object.keys(PLANETS).forEach(code=>{
     if(text.includes(code) && planetsFound.length < 2){
@@ -162,16 +179,18 @@ function miniAstroParser(rawText){
     }
   });
 
-  // detect any sign number
-  const signMatch = text.match(/\b(1[0-2]|[1-9])\b/);
-  const planetSign = signMatch ? parseInt(signMatch[0]) : null;
+  /* ===============================
+  STEP 3 → FIND SIGN NUMBERS
+  =============================== */
+  const signNumbers = text.match(/\b(1[0-2]|[1-9])\b/g);
 
-  // calculate house
   const houses = {};
-  if(lagnaSign && planetSign){
-    planetsFound.forEach(p=>{
+
+  if(lagnaSign && signNumbers){
+    planetsFound.forEach((planet,i)=>{
+      const planetSign = parseInt(signNumbers[i % signNumbers.length]);
       const house = (planetSign - lagnaSign + 12) % 12 + 1;
-      houses[p] = "House " + house;
+      houses[planet] = "House " + house;
     });
   }
 
@@ -180,4 +199,4 @@ function miniAstroParser(rawText){
     PlanetsDetected: planetsFound,
     CalculatedHouses: houses
   };
-                                          }
+                                        }
