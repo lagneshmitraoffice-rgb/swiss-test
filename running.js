@@ -7,13 +7,12 @@ let ocrWorker = null;
 
 async function initOCR(){
   if(ocrWorker) return;
-
   ocrWorker = await Tesseract.createWorker("eng");
   console.log("✅ OCR Worker Ready");
 }
 
 /* ===================================================
-IMAGE PREPROCESS (HIGH CONTRAST)
+IMAGE PREPROCESS (HIGH CONTRAST MAGIC)
 =================================================== */
 async function preprocessImage(file){
 
@@ -30,16 +29,14 @@ async function preprocessImage(file){
   const imageData = ctx.getImageData(0,0,canvas.width,canvas.height);
   const data = imageData.data;
 
+  // 🔥 Strong B/W threshold (best for charts)
   for(let i=0;i<data.length;i+=4){
-
     const avg = (data[i]+data[i+1]+data[i+2])/3;
     const val = avg > 160 ? 255 : 0;
-
     data[i] = data[i+1] = data[i+2] = val;
   }
 
   ctx.putImageData(imageData,0,0);
-
   return canvas;
 }
 
@@ -63,7 +60,16 @@ window.extractChartFromImage = async function(file){
 };
 
 /* ===================================================
-PLANET + NUMBER PARSER
+🔥 SMART MEMORY PARSER (FINAL)
+North Indian charts read like:
+
+JU
+ME PL
+SU 7
+NE UR 8
+11 MO
+
+Planet line → next number line = house
 =================================================== */
 function parseAstroText(rawText){
 
@@ -92,30 +98,42 @@ function parseAstroText(rawText){
 
   const lines = text.split("\n");
 
+  let pendingPlanets = [];
+
   lines.forEach(line => {
 
-    // detect house number (1–12)
+    line = line.trim();
+    if(!line) return;
+
+    /* ===============================
+       STEP 1 → detect planets first
+    =============================== */
+    Object.keys(PLANET_CODES).forEach(code => {
+      if(line.includes(code)){
+        pendingPlanets.push(PLANET_CODES[code]);
+      }
+    });
+
+    /* ===============================
+       STEP 2 → detect house number
+    =============================== */
     const houseMatch = line.match(/\b(1[0-2]|[1-9])\b/);
 
-    if(!houseMatch) return;
+    if(houseMatch && pendingPlanets.length > 0){
 
-    const house = houseMatch[0];
+      const house = houseMatch[0];
 
-    if(!result.houses[house])
-      result.houses[house] = [];
+      if(!result.houses[house])
+        result.houses[house] = [];
 
-    // detect planet codes in same line
-    Object.keys(PLANET_CODES).forEach(code => {
+      pendingPlanets.forEach(planet=>{
+        result.houses[house].push(planet);
+        result.planets[planet] = "House " + house;
+      });
 
-      if(line.includes(code)){
-
-        const planetName = PLANET_CODES[code];
-
-        result.houses[house].push(planetName);
-        result.planets[planetName] = "House " + house;
-      }
-
-    });
+      // memory clear after assignment
+      pendingPlanets = [];
+    }
 
   });
 
