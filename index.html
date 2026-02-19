@@ -37,52 +37,75 @@
 
 </div>
 
+<!-- ===================================================
+🚀 MAIN SCRIPT (SAFE DOM READY)
+=================================================== -->
 <script type="module">
+
+window.addEventListener("DOMContentLoaded", () => {
+
 console.log("UI READY");
 
-const box = document.getElementById("resultBox");
+/* ================= ELEMENTS ================= */
+
+const box   = document.getElementById("resultBox");
+const panel = document.getElementById("toolPanel");
 
 /* ================= PANEL CONTROL ================= */
 
-const panel = document.getElementById("toolPanel");
-
-document.getElementById("openToolsBtn").onclick = () =>{
+document.getElementById("openToolsBtn").addEventListener("click", ()=>{
   panel.classList.remove("panelHidden");
-}
+});
 
-document.getElementById("closePanel").onclick = () =>{
+document.getElementById("closePanel").addEventListener("click", ()=>{
   panel.classList.add("panelHidden");
-}
+});
 
 /* ================= SWISS WORKER ================= */
 
-const worker = new Worker("./swissworker.js",{ type:"module" });
+box.textContent = "🔄 Booting Swiss Engine...";
+
+const worker = new Worker("./swissworker.js", { type:"module" });
 
 worker.onmessage = (e)=>{
-  if(e.data.type==="ready") box.textContent="✅ Swiss Ready";
-  if(e.data.type==="result") box.textContent=JSON.stringify(e.data.data,null,2);
-  if(e.data.type==="error") box.textContent="❌ "+e.data.message;
-  if(e.data.type==="log") box.textContent += "\n"+e.data.message;
+
+  if(e.data.type === "ready"){
+    box.textContent = "✅ Swiss Ephemeris Ready";
+  }
+
+  if(e.data.type === "result"){
+    box.textContent = JSON.stringify(e.data.data, null, 2);
+  }
+
+  if(e.data.type === "error"){
+    box.textContent = "❌ " + e.data.message;
+  }
+
+  if(e.data.type === "log"){
+    box.textContent += "\n" + e.data.message;
+  }
+
 };
 
 worker.postMessage({ type:"init" });
 
 /* ================= GENERATE CHART ================= */
 
-document.getElementById("chartBtn").onclick = () =>{
+document.getElementById("chartBtn").addEventListener("click", ()=>{
 
   const dob = prompt("Enter DOB (YYYY-MM-DD)");
   const tob = prompt("Enter TOB (HH:MM)");
 
   if(!dob || !tob) return;
 
-  box.textContent="🔮 Calculating...";
+  box.textContent = "🔮 Calculating chart...";
   worker.postMessage({ type:"calc", dob, tob });
-};
+
+});
 
 /* ================= OCR EXTRACTOR ================= */
 
-document.getElementById("extractBtn").onclick = async ()=>{
+document.getElementById("extractBtn").addEventListener("click", async ()=>{
 
   const file = document.getElementById("chartImageInput").files[0];
 
@@ -91,12 +114,18 @@ document.getElementById("extractBtn").onclick = async ()=>{
     return;
   }
 
-  box.textContent="📸 Reading chart...";
-  const result = await window.extractChartFromImage(file);
+  box.textContent = "📸 Reading chart image...";
 
-  box.textContent = JSON.stringify(result,null,2);
-};
+  try{
+    const result = await window.extractChartFromImage(file);
+    box.textContent = JSON.stringify(result, null, 2);
+  }catch(err){
+    box.textContent = "❌ OCR Error:\n" + err;
+  }
 
+});
+
+});
 </script>
 
 </body>
