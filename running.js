@@ -1,4 +1,4 @@
-console.log("📸 Chart Extractor Engine Running (STABLE BUILD)");
+console.log("📸 Chart Extractor Engine Running (ZONE MATCH ENGINE)");
 
 let ocrWorker = null;
 
@@ -21,7 +21,7 @@ async function initOCR(){
 }
 
 /* ===================================================
-IMAGE PREPROCESS (UPSCALE + B/W)
+IMAGE PREPROCESS
 =================================================== */
 async function preprocessImage(file){
 
@@ -47,8 +47,7 @@ async function preprocessImage(file){
 }
 
 /* ===================================================
-LETTER MERGE ENGINE
-Fix broken OCR letters like M O → MO
+MERGE BROKEN OCR LETTERS  (M O -> MO)
 =================================================== */
 function mergeNearbyLetters(words){
 
@@ -86,7 +85,7 @@ function mergeNearbyLetters(words){
 }
 
 /* ===================================================
-CORE ASTRO ENGINE (SIGN → HOUSE)
+🔥 CORE ENGINE (ZONE BASED MATCH)
 =================================================== */
 function extractByPositions(words){
 
@@ -106,25 +105,24 @@ function extractByPositions(words){
 
   const merged = mergeNearbyLetters(words);
 
-  let signs=[];
+  let numbers=[];
   let planets=[];
 
   /* ===============================
-  DETECT SIGNS & PLANETS
+  DETECT NUMBERS + PLANETS
   =============================== */
   merged.forEach(w=>{
 
     const text=w.text;
 
-    // Sign numbers
+    // numbers = SIGNS
     if(/^(1[0-2]|[1-9])$/.test(text)){
-      signs.push({sign:parseInt(text),x:w.x,y:w.y});
+      numbers.push({num:parseInt(text),x:w.x,y:w.y});
       return;
     }
 
     if(text.length>4) return;
 
-    // Planet detection
     if(PLANET_MAP[text]){
       planets.push({planet:PLANET_MAP[text],x:w.x,y:w.y});
     }
@@ -132,46 +130,46 @@ function extractByPositions(words){
   });
 
   /* ===============================
-  PLANET → NEAREST SIGN
+  CREATE ZONES AROUND NUMBERS
   =============================== */
-  const planetToSign={};
+  const ZONE_SIZE = 140; // 🔥 magic number
 
-  planets.forEach(p=>{
-    let minDist=Infinity;
-    let closest=null;
+  const signToPlanets={};
 
-    signs.forEach(s=>{
-      const dx=p.x-s.x;
-      const dy=p.y-s.y;
-      const dist=Math.sqrt(dx*dx+dy*dy);
-      if(dist<minDist){
-        minDist=dist;
-        closest=s.sign;
+  numbers.forEach(n=>{
+
+    const left   = n.x - ZONE_SIZE;
+    const right  = n.x + ZONE_SIZE;
+    const top    = n.y - ZONE_SIZE;
+    const bottom = n.y + ZONE_SIZE;
+
+    planets.forEach(p=>{
+      const inside =
+        p.x > left &&
+        p.x < right &&
+        p.y > top &&
+        p.y < bottom;
+
+      if(inside){
+        if(!signToPlanets[n.num]) signToPlanets[n.num]=[];
+        if(!signToPlanets[n.num].includes(p.planet))
+          signToPlanets[n.num].push(p.planet);
       }
     });
 
-    if(closest && !planetToSign[p.planet]){
-      planetToSign[p.planet]=closest;
-    }
   });
 
-  /* ===================================================
-  ⭐ SMART LAGNA DETECTION
-  Lagna = LEFT MIDDLE diamond (North Indian chart)
-  =================================================== */
+  /* ===============================
+  SMART LAGNA DETECTION
+  left-middle sign = Lagna
+  =============================== */
   let lagnaSign=null;
 
-  if(signs.length){
-    const avgY = signs.reduce((sum,s)=>sum+s.y,0) / signs.length;
+  if(numbers.length){
+    const avgY = numbers.reduce((s,n)=>s+n.y,0)/numbers.length;
 
-    const middleBand = signs.filter(s =>
-      Math.abs(s.y - avgY) < 120
-    );
-
-    if(middleBand.length){
-      const leftMost = middleBand.sort((a,b)=>a.x-b.x)[0];
-      lagnaSign = leftMost.sign;
-    }
+    const mid = numbers.filter(n=>Math.abs(n.y-avgY)<120);
+    lagnaSign = mid.sort((a,b)=>a.x-b.x)[0].num;
   }
 
   /* ===============================
@@ -180,29 +178,33 @@ function extractByPositions(words){
   const finalHouses={};
   const finalPlanets={};
 
-  Object.keys(planetToSign).forEach(planet=>{
+  Object.keys(signToPlanets).forEach(sign=>{
 
-    const sign=planetToSign[planet];
-    const house=(sign-lagnaSign+12)%12+1;
+    const house = (sign - lagnaSign + 12)%12 + 1;
 
-    if(!finalHouses[house]) finalHouses[house]=[];
+    signToPlanets[sign].forEach(planet=>{
 
-    finalHouses[house].push({
-      planet,
-      sign:SIGN_NAMES[sign]
+      if(!finalHouses[house]) finalHouses[house]=[];
+
+      finalHouses[house].push({
+        planet,
+        sign:SIGN_NAMES[sign]
+      });
+
+      finalPlanets[planet]={
+        sign:SIGN_NAMES[sign],
+        house:"House "+house
+      };
+
     });
 
-    finalPlanets[planet]={
-      sign:SIGN_NAMES[sign],
-      house:"House "+house
-    };
   });
 
   return{
     LagnaSign:SIGN_NAMES[lagnaSign],
     extractedHouses:finalHouses,
     planetMapping:finalPlanets,
-    detectedSigns:signs.length,
+    detectedSigns:numbers.length,
     detectedPlanets:Object.keys(finalPlanets).length
   };
 }
