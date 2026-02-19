@@ -32,21 +32,22 @@
   <input type="file" id="chartImageInput" accept="image/*">
   <button id="extractBtn">📸 Extract Chart Data</button>
 
+  <hr>
+  <button id="ipbBtn">✨ Open Interpretation Engine</button>
+
   <br><br>
   <button id="closePanel">Close</button>
 
 </div>
 
 <!-- ===================================================
-🚀 MAIN SCRIPT (SAFE DOM READY)
+🚀 MAIN SCRIPT
 =================================================== -->
 <script type="module">
 
 window.addEventListener("DOMContentLoaded", () => {
 
 console.log("UI READY");
-
-/* ================= ELEMENTS ================= */
 
 const box   = document.getElementById("resultBox");
 const panel = document.getElementById("toolPanel");
@@ -123,6 +124,12 @@ document.getElementById("extractBtn").addEventListener("click", async ()=>{
     box.textContent = "❌ OCR Error:\n" + err;
   }
 
+});
+
+/* ================= OPEN INTERPRETATION ENGINE ================= */
+
+document.getElementById("ipbBtn").addEventListener("click", ()=>{
+  window.open("./ipb.html", "_blank");
 });
 
 });
