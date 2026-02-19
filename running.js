@@ -35,6 +35,7 @@ async function preprocessImage(file){
   const imageData = ctx.getImageData(0,0,canvas.width,canvas.height);
   const data = imageData.data;
 
+  // Strong B/W threshold
   for(let i=0;i<data.length;i+=4){
     const avg = (data[i]+data[i+1]+data[i+2])/3;
     const val = avg>140 ? 255 : 0;
@@ -46,7 +47,7 @@ async function preprocessImage(file){
 }
 
 /* ===================================================
-📍 FIND TEXT POSITIONS (KEY BREAKTHROUGH)
+📍 FIND TEXT POSITIONS (LOCATE LAGNA CHART AREA)
 =================================================== */
 async function getTextBlocks(canvas){
 
@@ -74,12 +75,32 @@ async function cropChartRegion(fullCanvas){
     if(w.text.includes("VIMSH")) dashaY = w.y;
   });
 
+  // Fallback if OCR words fail
   if(!lagnaY || !dashaY){
-    console.log("⚠️ Chart region not found → using full image");
-    return fullCanvas;
+    console.log("⚠️ Smart crop fallback activated");
+
+    const fallbackCanvas = document.createElement("canvas");
+    const ctx = fallbackCanvas.getContext("2d");
+
+    const topCut = fullCanvas.height * 0.20;
+    const bottomCut = fullCanvas.height * 0.35;
+    const cropHeight = fullCanvas.height - topCut - bottomCut;
+
+    fallbackCanvas.width  = fullCanvas.width;
+    fallbackCanvas.height = cropHeight;
+
+    ctx.drawImage(
+      fullCanvas,
+      0, topCut,
+      fullCanvas.width, cropHeight,
+      0,0,
+      fallbackCanvas.width,fallbackCanvas.height
+    );
+
+    return fallbackCanvas;
   }
 
-  console.log("📐 Cropping Lagna Chart area");
+  console.log("📐 Cropping Lagna Chart via text detection");
 
   const cropCanvas = document.createElement("canvas");
   const ctx = cropCanvas.getContext("2d");
@@ -111,7 +132,7 @@ window.extractChartFromImage = async function(file){
   console.log("✂️ Step 2 → Crop Lagna Chart");
   const chartCanvas = await cropChartRegion(fullCanvas);
 
-  console.log("🔍 Step 3 → OCR ONLY on chart");
+  console.log("🔍 Step 3 → OCR ONLY on chart region");
   const { data:{ text } } = await ocrWorker.recognize(chartCanvas);
 
   console.log("📄 FINAL OCR TEXT:");
@@ -122,6 +143,7 @@ window.extractChartFromImage = async function(file){
 
 /* ===================================================
 🧠 NORTH INDIAN MEMORY PARSER
+Planet lines appear BEFORE house number
 =================================================== */
 function parseAstroText(rawText){
 
@@ -143,13 +165,13 @@ function parseAstroText(rawText){
     line = line.trim();
     if(!line) return;
 
-    // collect planets
+    // Collect planets
     Object.keys(PLANET_CODES).forEach(code=>{
       if(line.includes(code))
         pendingPlanets.push(PLANET_CODES[code]);
     });
 
-    // detect house number
+    // Detect house number
     const houseMatch = line.match(/\b(1[0-2]|[1-9])\b/);
 
     if(houseMatch && pendingPlanets.length>0){
@@ -167,4 +189,4 @@ function parseAstroText(rawText){
   });
 
   return result;
-}
+    }
