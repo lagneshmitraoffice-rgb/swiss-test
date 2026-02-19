@@ -1,7 +1,7 @@
-console.log("📸 Chart Extractor Engine Running (POSITION MODE v2)");
+console.log("📸 Chart Extractor Engine Running (POSITION MODE v3)");
 
 /* ===================================================
-INIT OCR WORKER (HIGH ACCURACY MODE)
+INIT OCR WORKER
 =================================================== */
 let ocrWorker = null;
 
@@ -60,11 +60,61 @@ window.extractChartFromImage = async function(file){
 };
 
 /* ===================================================
-🔥 CORE POSITION ENGINE (UPGRADED)
+🔥 LETTER MERGE ENGINE
+Merge nearby letters into clusters
+=================================================== */
+function mergeNearbyLetters(words){
+
+  // sort by Y then X
+  words.sort((a,b)=>{
+    if(Math.abs(a.bbox.y0 - b.bbox.y0) < 20)
+      return a.bbox.x0 - b.bbox.x0;
+    return a.bbox.y0 - b.bbox.y0;
+  });
+
+  const merged = [];
+  let current = null;
+
+  words.forEach(w=>{
+
+    const text = w.text.toUpperCase().trim();
+    if(!text) return;
+
+    if(!current){
+      current = {
+        text,
+        x: w.bbox.x0,
+        y: w.bbox.y0
+      };
+      return;
+    }
+
+    const closeY = Math.abs(current.y - w.bbox.y0) < 20;
+    const closeX = Math.abs(w.bbox.x0 - (current.x + current.text.length*15)) < 40;
+
+    if(closeY && closeX){
+      current.text += text;
+    } else {
+      merged.push(current);
+      current = {
+        text,
+        x: w.bbox.x0,
+        y: w.bbox.y0
+      };
+    }
+
+  });
+
+  if(current) merged.push(current);
+
+  return merged;
+}
+
+/* ===================================================
+🔥 CORE POSITION ENGINE (FINAL)
 =================================================== */
 function extractByPositions(words){
 
-  // FULL + SHORT CODES
   const PLANET_MAP = {
 
     // 2-letter
@@ -72,46 +122,46 @@ function extractByPositions(words){
     JU:"Jupiter", VE:"Venus", SA:"Saturn",
     RA:"Rahu", KE:"Ketu",
 
-    // Single-letter North Indian
-    S:"Saturn",
-    M:"Moon",
-    V:"Venus",
-    J:"Jupiter",
-    R:"Rahu",
-    K:"Ketu"
+    // 1-letter fallback
+    S:"Saturn", M:"Moon", V:"Venus",
+    J:"Jupiter", R:"Rahu", K:"Ketu"
   };
+
+  const mergedWords = mergeNearbyLetters(words);
 
   let houseNumbers = [];
   let planetWords  = [];
 
   /* ===================================================
-  STEP 1 → SEPARATE HOUSE NUMBERS & PLANETS
+  STEP 1 → DETECT HOUSE NUMBERS & PLANETS
   =================================================== */
-  words.forEach(w => {
+  mergedWords.forEach(w => {
 
-    const text = w.text.toUpperCase().trim();
+    const text = w.text;
 
-    // detect house numbers 1–12
+    // House numbers
     if(/^(1[0-2]|[1-9])$/.test(text)){
       houseNumbers.push({
         house: parseInt(text),
-        x: w.bbox.x0,
-        y: w.bbox.y0
+        x: w.x,
+        y: w.y
       });
       return;
     }
 
-    // ignore long garbage words
-    if(text.length > 3) return;
+    // Ignore long garbage
+    if(text.length > 6) return;
 
-    // detect planets (exact match only)
-    if(PLANET_MAP[text]){
-      planetWords.push({
-        planet: PLANET_MAP[text],
-        x: w.bbox.x0,
-        y: w.bbox.y0
-      });
-    }
+    // Check planet codes inside cluster
+    Object.keys(PLANET_MAP).forEach(code=>{
+      if(text.includes(code)){
+        planetWords.push({
+          planet: PLANET_MAP[code],
+          x: w.x,
+          y: w.y
+        });
+      }
+    });
 
   });
 
@@ -119,7 +169,7 @@ function extractByPositions(words){
   console.log("🪐 Planets detected:", planetWords);
 
   /* ===================================================
-  STEP 2 → FIND NEAREST HOUSE FOR EACH PLANET
+  STEP 2 → NEAREST HOUSE MAPPING
   =================================================== */
   const result = { houses:{}, planets:{} };
 
@@ -144,7 +194,6 @@ function extractByPositions(words){
       if(!result.houses[closestHouse])
         result.houses[closestHouse] = [];
 
-      // avoid duplicates
       if(!result.houses[closestHouse].includes(p.planet)){
         result.houses[closestHouse].push(p.planet);
       }
@@ -155,7 +204,7 @@ function extractByPositions(words){
   });
 
   /* ===================================================
-  STEP 3 → SORT OUTPUT CLEANLY
+  STEP 3 → SORT OUTPUT
   =================================================== */
   const sortedHouses = {};
   Object.keys(result.houses)
@@ -170,4 +219,4 @@ function extractByPositions(words){
     detectedHouseCount: houseNumbers.length,
     detectedPlanetCount: planetWords.length
   };
-}
+  }
