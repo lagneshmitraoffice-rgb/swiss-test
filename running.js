@@ -1,4 +1,4 @@
-console.log("📸 Chart Extractor Engine Loaded (FINAL STABLE)");
+console.log("📸 Chart Extractor Engine Loaded (ULTRA STABLE BUILD)");
 
 (function(){
 
@@ -27,7 +27,7 @@ async function initOCR(){
 }
 
 /* ===================================================
-IMAGE PREPROCESS (UPSCALE + STRONG B/W)
+IMAGE PREPROCESS
 =================================================== */
 async function preprocessImage(file){
 
@@ -75,16 +75,15 @@ function extractNumbers(words){
 }
 
 /* ===================================================
-🔥 BIG DONUT INK DETECTOR (FINAL GEOMETRY FIX)
+BIG DONUT PLANET INK DETECTOR
 =================================================== */
 function detectPlanetInk(canvas, numbers){
 
   const ctx = canvas.getContext("2d");
   const img = ctx.getImageData(0,0,canvas.width,canvas.height).data;
 
-  // ⭐ FINAL GEOMETRY VALUES ⭐
-  const OUTER = 320;   // planet zone distance from number
-  const INNER = 160;   // ignore number + borders
+  const OUTER = 320;
+  const INNER = 160;
 
   const densityMap = {};
 
@@ -98,7 +97,6 @@ function detectPlanetInk(canvas, numbers){
     const startY = Math.max(0, n.y - OUTER);
     const endY   = Math.min(canvas.height, n.y + OUTER);
 
-    // ⭐ step 2 for speed boost (4x faster)
     for(let y=startY; y<endY; y+=2){
       for(let x=startX; x<endX; x+=2){
 
@@ -106,7 +104,6 @@ function detectPlanetInk(canvas, numbers){
         const dy = y - n.y;
         const dist = Math.sqrt(dx*dx + dy*dy);
 
-        // DONUT RING ONLY
         if(dist < INNER || dist > OUTER) continue;
 
         pixels++;
@@ -123,7 +120,7 @@ function detectPlanetInk(canvas, numbers){
 }
 
 /* ===================================================
-LAGNA DETECTION (GEOMETRY SAFE)
+LAGNA DETECTION
 =================================================== */
 function detectLagna(numbers){
 
@@ -139,7 +136,7 @@ function detectLagna(numbers){
 }
 
 /* ===================================================
-🔥 RELATIVE SPIKE DETECTOR (REAL PLANET DETECTION)
+🔥 ADAPTIVE PLANET DETECTOR (GAME CHANGER)
 =================================================== */
 function convertToHouses(densityMap, lagnaSign){
 
@@ -152,28 +149,41 @@ function convertToHouses(densityMap, lagnaSign){
   const houses = {};
   const planets = {};
 
-  const values = Object.values(densityMap);
-  if(!values.length || !lagnaSign)
+  const entries = Object.entries(densityMap);
+  if(!entries.length || !lagnaSign)
     return {houses:{}, planets:{}};
 
-  const avg = values.reduce((a,b)=>a+b,0) / values.length;
-  const sorted = [...values].sort((a,b)=>a-b);
-  const median = sorted[Math.floor(sorted.length/2)];
+  // sort by density DESC
+  entries.sort((a,b)=>b[1]-a[1]);
 
-  console.log("Density avg:",avg," median:",median);
+  const densities = entries.map(e=>e[1]);
+  const avg = densities.reduce((a,b)=>a+b,0) / densities.length;
 
-  Object.keys(densityMap).forEach(signKey=>{
+  let detectedSigns = [];
 
-    const density = densityMap[signKey];
+  /* ===== STAGE 1 : STRONG SPIKES ===== */
+  entries.forEach(([sign,density])=>{
+    if(density > avg * 1.25)
+      detectedSigns.push(parseInt(sign));
+  });
 
-    // ⭐ FINAL SPIKE LOGIC ⭐
-    const spike =
-      density > avg * 1.25 &&
-      density > median * 1.15;
+  /* ===== STAGE 2 : MEDIUM SPIKES ===== */
+  if(detectedSigns.length < 3){
+    entries.slice(0,6).forEach(([sign,density])=>{
+      if(density > avg * 1.10)
+        detectedSigns.push(parseInt(sign));
+    });
+  }
 
-    if(!spike) return;
+  /* ===== STAGE 3 : FALLBACK ===== */
+  if(detectedSigns.length < 3){
+    console.log("⚠️ Weak chart fallback used");
+    detectedSigns = entries.slice(0,5).map(e=>parseInt(e[0]));
+  }
 
-    const sign = parseInt(signKey);
+  /* ===== SIGN → HOUSE ===== */
+  detectedSigns.forEach(sign=>{
+
     const house = (sign - lagnaSign + 12) % 12 + 1;
 
     if(!houses[house]) houses[house] = [];
