@@ -1,8 +1,5 @@
-console.log("📸 Chart Extractor Engine Loaded");
+console.log("📸 Chart Extractor Engine Loaded (Astro Validated Build)");
 
-/* ===================================================
-GLOBAL SAFE EXPORT
-=================================================== */
 (function(){
 
 let ocrWorker = null;
@@ -13,7 +10,7 @@ INIT OCR
 async function initOCR(){
 
   if(!window.Tesseract){
-    throw new Error("Tesseract not loaded. Check <script src>");
+    throw new Error("Tesseract not loaded.");
   }
 
   if(ocrWorker) return;
@@ -28,7 +25,7 @@ async function initOCR(){
     preserve_interword_spaces: "1"
   });
 
-  console.log("✅ OCR Worker Ready");
+  console.log("✅ OCR Ready");
 }
 
 /* ===================================================
@@ -37,7 +34,6 @@ IMAGE PREPROCESS
 async function preprocessImage(file){
 
   const img = await createImageBitmap(file);
-
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
 
@@ -56,12 +52,11 @@ async function preprocessImage(file){
   }
 
   ctx.putImageData(imageData,0,0);
-
   return canvas;
 }
 
 /* ===================================================
-MERGE LETTERS
+MERGE BROKEN LETTERS
 =================================================== */
 function mergeNearbyLetters(words){
 
@@ -75,7 +70,7 @@ function mergeNearbyLetters(words){
   let current=null;
 
   words.forEach(w=>{
-    const text = w.text.toUpperCase().trim();
+    const text=w.text.toUpperCase().trim();
     if(!text) return;
 
     if(!current){
@@ -83,11 +78,11 @@ function mergeNearbyLetters(words){
       return;
     }
 
-    const closeY = Math.abs(current.y - w.bbox.y0) < 20;
-    const closeX = Math.abs(w.bbox.x0 - (current.x + current.text.length*15)) < 40;
+    const closeY=Math.abs(current.y-w.bbox.y0)<20;
+    const closeX=Math.abs(w.bbox.x0-(current.x+current.text.length*15))<40;
 
     if(closeY && closeX){
-      current.text += text;
+      current.text+=text;
     }else{
       merged.push(current);
       current={text,x:w.bbox.x0,y:w.bbox.y0};
@@ -95,8 +90,46 @@ function mergeNearbyLetters(words){
   });
 
   if(current) merged.push(current);
-
   return merged;
+}
+
+/* ===================================================
+ASTRO VALIDATION SCORING
+=================================================== */
+function scoreLagna(lagnaSign, signToPlanets){
+
+  let score=0;
+
+  // Rahu-Ketu opposite rule
+  let rahuSign=null;
+  let ketuSign=null;
+
+  Object.keys(signToPlanets).forEach(sign=>{
+    if(signToPlanets[sign].includes("Rahu")) rahuSign=parseInt(sign);
+    if(signToPlanets[sign].includes("Ketu")) ketuSign=parseInt(sign);
+  });
+
+  if(rahuSign && ketuSign){
+    const opposite=(rahuSign+6-1)%12+1;
+    if(opposite===ketuSign) score+=5;
+  }
+
+  // Sun near Mercury or Venus rule
+  let sunSign=null;
+  let mercurySign=null;
+  let venusSign=null;
+
+  Object.keys(signToPlanets).forEach(sign=>{
+    const list=signToPlanets[sign];
+    if(list.includes("Sun")) sunSign=parseInt(sign);
+    if(list.includes("Mercury")) mercurySign=parseInt(sign);
+    if(list.includes("Venus")) venusSign=parseInt(sign);
+  });
+
+  if(sunSign && mercurySign && Math.abs(sunSign-mercurySign)<=1) score+=3;
+  if(sunSign && venusSign && Math.abs(sunSign-venusSign)<=1) score+=3;
+
+  return score;
 }
 
 /* ===================================================
@@ -111,19 +144,13 @@ function extractByPositions(rawWords){
   };
 
   const PLANET_CHAR_MAP={
-    M:"Moon",
-    J:"Jupiter",
-    V:"Venus",
-    S:"Saturn",
-    R:"Rahu",
-    K:"Ketu",
-    U:"Sun",
-    E:"Mercury",
+    M:"Moon", J:"Jupiter", V:"Venus",
+    S:"Saturn", R:"Rahu", K:"Ketu",
+    U:"Sun", E:"Mercury",
     A:"Mars",N:"Mars",H:"Mars"
   };
 
-  /* ===== GET SIGN NUMBERS ===== */
-  const merged = mergeNearbyLetters(rawWords);
+  const merged=mergeNearbyLetters(rawWords);
 
   let numbers=[];
   merged.forEach(w=>{
@@ -132,10 +159,9 @@ function extractByPositions(rawWords){
     }
   });
 
-  /* ===== GET PLANETS (RAW OCR) ===== */
   let planets=[];
   rawWords.forEach(w=>{
-    const char = w.text.toUpperCase().replace(/[^A-Z]/g,'');
+    const char=w.text.toUpperCase().replace(/[^A-Z]/g,'');
     if(PLANET_CHAR_MAP[char]){
       planets.push({
         planet:PLANET_CHAR_MAP[char],
@@ -145,7 +171,6 @@ function extractByPositions(rawWords){
     }
   });
 
-  /* ===== ZONE MATCH ===== */
   const ZONE_SIZE=140;
   const signToPlanets={};
 
@@ -164,27 +189,24 @@ function extractByPositions(rawWords){
     });
   });
 
-  /* ===== LAGNA DETECTION ===== */
-  let lagnaSign=null;
+  // 🔥 BRUTE FORCE LAGNA
+  let bestLagna=null;
+  let bestScore=-1;
 
-  if(numbers.length){
-    const avgY = numbers.reduce((s,n)=>s+n.y,0)/numbers.length;
-    const mid = numbers.filter(n=>Math.abs(n.y-avgY)<120);
-    if(mid.length){
-      lagnaSign = mid.sort((a,b)=>a.x-b.x)[0].num;
+  for(let lagna=1;lagna<=12;lagna++){
+    const score=scoreLagna(lagna,signToPlanets);
+    if(score>bestScore){
+      bestScore=score;
+      bestLagna=lagna;
     }
   }
 
-  /* ===== SIGN → HOUSE ===== */
   const finalHouses={};
   const finalPlanets={};
 
   Object.keys(signToPlanets).forEach(signKey=>{
     const sign=parseInt(signKey);
-
-    if(!lagnaSign) return;
-
-    const house=(sign-lagnaSign+12)%12+1;
+    const house=(sign-bestLagna+12)%12+1;
 
     signToPlanets[sign].forEach(planet=>{
       if(!finalHouses[house]) finalHouses[house]=[];
@@ -202,28 +224,24 @@ function extractByPositions(rawWords){
   });
 
   return{
-    LagnaSign:SIGN_NAMES[lagnaSign],
+    LagnaSign:SIGN_NAMES[bestLagna],
     extractedHouses:finalHouses,
     planetMapping:finalPlanets,
     detectedSigns:numbers.length,
-    detectedPlanets:Object.keys(finalPlanets).length
+    detectedPlanets:Object.keys(finalPlanets).length,
+    validationScore:bestScore
   };
 }
 
 /* ===================================================
-PUBLIC FUNCTION (GLOBAL SAFE)
+PUBLIC FUNCTION
 =================================================== */
-window.extractChartFromImage = async function(file){
+window.extractChartFromImage=async function(file){
 
-  try{
-    await initOCR();
-    const canvas = await preprocessImage(file);
-    const { data } = await ocrWorker.recognize(canvas);
-    return extractByPositions(data.words);
-  }catch(err){
-    console.error("❌ OCR ERROR:",err);
-    throw err;
-  }
+  await initOCR();
+  const canvas=await preprocessImage(file);
+  const {data}=await ocrWorker.recognize(canvas);
+  return extractByPositions(data.words);
 };
 
 })();
