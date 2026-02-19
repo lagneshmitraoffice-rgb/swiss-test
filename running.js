@@ -12,7 +12,7 @@ async function initOCR(){
 }
 
 /* ===================================================
-🖼 IMAGE PREPROCESSOR (MAGIC STEP)
+🖼 IMAGE PREPROCESSOR (HIGH CONTRAST)
 =================================================== */
 async function preprocessImage(file){
 
@@ -23,46 +23,86 @@ async function preprocessImage(file){
 
   canvas.width = img.width;
   canvas.height = img.height;
-
   ctx.drawImage(img,0,0);
 
   const imageData = ctx.getImageData(0,0,canvas.width,canvas.height);
   const data = imageData.data;
 
-  // GRAYSCALE + HIGH CONTRAST
+  // Convert to B/W high contrast
   for(let i=0;i<data.length;i+=4){
     const avg = (data[i]+data[i+1]+data[i+2])/3;
-
-    const val = avg > 160 ? 255 : 0; // threshold
-    data[i] = data[i+1] = data[i+2] = val;
+    const val = avg > 160 ? 255 : 0;
+    data[i]=data[i+1]=data[i+2]=val;
   }
 
   ctx.putImageData(imageData,0,0);
-
   return canvas;
 }
 
 /* ===================================================
-IMAGE → ASTRO DATA
+✂️ SLICE NORTH INDIAN CHART INTO HOUSES
+=================================================== */
+async function sliceChartIntoHouses(canvas){
+
+  const w = canvas.width;
+  const h = canvas.height;
+
+  const boxW = w/3;
+  const boxH = h/3;
+
+  const houses = [];
+
+  // 3x3 grid → center skip
+  const coords = [
+    [0,0],[1,0],[2,0],
+    [0,1],      [2,1],
+    [0,2],[1,2],[2,2]
+  ];
+
+  coords.forEach(([x,y])=>{
+    const crop = document.createElement("canvas");
+    crop.width = boxW;
+    crop.height = boxH;
+
+    crop.getContext("2d").drawImage(
+      canvas,
+      x*boxW, y*boxH, boxW, boxH,
+      0,0,boxW,boxH
+    );
+
+    houses.push(crop);
+  });
+
+  return houses;
+}
+
+/* ===================================================
+IMAGE → ASTRO DATA (MAIN PIPELINE)
 =================================================== */
 window.extractChartFromImage = async function(file){
 
   await initOCR();
 
-  console.log("🧪 Preprocessing image...");
-  const canvas = await preprocessImage(file);
+  console.log("🧪 Preprocessing...");
+  const preCanvas = await preprocessImage(file);
 
-  console.log("🔍 OCR Reading...");
-  const { data:{ text } } = await ocrWorker.recognize(canvas);
+  console.log("✂️ Slicing houses...");
+  const houseImages = await sliceChartIntoHouses(preCanvas);
 
-  console.log("📄 OCR TEXT:");
-  console.log(text);
+  let combinedText = "";
 
-  return parseAstroText(text);
+  for(const img of houseImages){
+    const { data:{ text } } = await ocrWorker.recognize(img);
+    combinedText += "\n" + text;
+  }
+
+  console.log("📄 OCR TEXT:", combinedText);
+
+  return parseAstroText(combinedText);
 };
 
 /* ===================================================
-🧠 NORTH INDIAN PARSER
+🧠 NORTH INDIAN PLANET PARSER
 =================================================== */
 function parseAstroText(rawText){
 
@@ -74,9 +114,13 @@ function parseAstroText(rawText){
     RA:"Rahu", KE:"Ketu", UR:"Uranus", NE:"Neptune", PL:"Pluto"
   };
 
-  const lines = text.split("\n");
+  const result = {
+    houses:{},
+    planets:{},
+    rawText:text
+  };
 
-  const result = { houses:{}, planets:{}, rawText:text };
+  const lines = text.split("\n");
 
   lines.forEach(line=>{
 
@@ -84,7 +128,7 @@ function parseAstroText(rawText){
     if(!houseMatch) return;
 
     const house = houseMatch[0];
-    result.houses[house] = [];
+    if(!result.houses[house]) result.houses[house] = [];
 
     Object.keys(PLANET_CODES).forEach(code=>{
       if(line.includes(code)){
