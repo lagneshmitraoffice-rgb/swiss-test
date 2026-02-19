@@ -1,4 +1,4 @@
-console.log("📸 Chart Extractor Engine Running (POSITION MODE v1)");
+console.log("📸 Chart Extractor Engine Running (POSITION MODE v2)");
 
 /* ===================================================
 INIT OCR WORKER (HIGH ACCURACY MODE)
@@ -19,7 +19,7 @@ async function initOCR(){
 }
 
 /* ===================================================
-🧠 IMAGE UPSCALE + BINARIZE (OCR BOOST)
+🧠 IMAGE UPSCALE + BINARIZE
 =================================================== */
 async function preprocessImage(file){
 
@@ -34,7 +34,6 @@ async function preprocessImage(file){
   const imageData = ctx.getImageData(0,0,canvas.width,canvas.height);
   const data = imageData.data;
 
-  // High contrast B/W conversion
   for(let i=0;i<data.length;i+=4){
     const avg = (data[i]+data[i+1]+data[i+2])/3;
     const val = avg > 140 ? 255 : 0;
@@ -57,22 +56,29 @@ window.extractChartFromImage = async function(file){
   console.log("🔍 Running OCR WORD MODE...");
   const { data } = await ocrWorker.recognize(canvas);
 
-  console.log("📦 OCR WORD BLOCKS:", data.words);
-
   return extractByPositions(data.words);
 };
 
 /* ===================================================
-🔥 CORE POSITION ENGINE
-WORD POSITIONS → PLANET → HOUSE
+🔥 CORE POSITION ENGINE (UPGRADED)
 =================================================== */
 function extractByPositions(words){
 
+  // FULL + SHORT CODES
   const PLANET_MAP = {
+
+    // 2-letter
     SU:"Sun", MO:"Moon", MA:"Mars", ME:"Mercury",
     JU:"Jupiter", VE:"Venus", SA:"Saturn",
     RA:"Rahu", KE:"Ketu",
-    S:"Saturn", M:"Moon", V:"Venus", J:"Jupiter"
+
+    // Single-letter North Indian
+    S:"Saturn",
+    M:"Moon",
+    V:"Venus",
+    J:"Jupiter",
+    R:"Rahu",
+    K:"Ketu"
   };
 
   let houseNumbers = [];
@@ -92,18 +98,20 @@ function extractByPositions(words){
         x: w.bbox.x0,
         y: w.bbox.y0
       });
+      return;
     }
 
-    // detect planet codes
-    Object.keys(PLANET_MAP).forEach(code=>{
-      if(text === code){
-        planetWords.push({
-          planet: PLANET_MAP[code],
-          x: w.bbox.x0,
-          y: w.bbox.y0
-        });
-      }
-    });
+    // ignore long garbage words
+    if(text.length > 3) return;
+
+    // detect planets (exact match only)
+    if(PLANET_MAP[text]){
+      planetWords.push({
+        planet: PLANET_MAP[text],
+        x: w.bbox.x0,
+        y: w.bbox.y0
+      });
+    }
 
   });
 
@@ -132,17 +140,22 @@ function extractByPositions(words){
     });
 
     if(closestHouse !== null){
+
       if(!result.houses[closestHouse])
         result.houses[closestHouse] = [];
 
-      result.houses[closestHouse].push(p.planet);
+      // avoid duplicates
+      if(!result.houses[closestHouse].includes(p.planet)){
+        result.houses[closestHouse].push(p.planet);
+      }
+
       result.planets[p.planet] = "House " + closestHouse;
     }
 
   });
 
   /* ===================================================
-  STEP 3 → SORT HOUSES NUMERICALLY (CLEAN OUTPUT)
+  STEP 3 → SORT OUTPUT CLEANLY
   =================================================== */
   const sortedHouses = {};
   Object.keys(result.houses)
