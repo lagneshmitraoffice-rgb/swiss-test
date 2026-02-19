@@ -3,7 +3,7 @@ console.log("📸 Chart Extractor Engine Running (ZONE MATCH ENGINE FINAL)");
 let ocrWorker = null;
 
 /* ===================================================
-INIT OCR WORKER
+INIT OCR WORKER (FINAL FIX)
 =================================================== */
 async function initOCR(){
   if(ocrWorker) return;
@@ -12,16 +12,19 @@ async function initOCR(){
   await ocrWorker.loadLanguage("eng");
   await ocrWorker.initialize("eng");
 
+  // ⭐⭐⭐ MOST IMPORTANT FIX ⭐⭐⭐
   await ocrWorker.setParameters({
     tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-    preserve_interword_spaces: "1"
+    preserve_interword_spaces: "1",
+    tessedit_pageseg_mode: "6",     // detect single letters
+    classify_bln_numeric_mode: "1"
   });
 
   console.log("✅ OCR Worker Ready");
 }
 
 /* ===================================================
-IMAGE PREPROCESS (UPSCALE + HIGH CONTRAST)
+IMAGE PREPROCESS (UPSCALE + STRONG B/W)
 =================================================== */
 async function preprocessImage(file){
 
@@ -31,15 +34,15 @@ async function preprocessImage(file){
 
   canvas.width  = img.width * 3;
   canvas.height = img.height * 3;
-
   ctx.drawImage(img,0,0,canvas.width,canvas.height);
 
   const imageData = ctx.getImageData(0,0,canvas.width,canvas.height);
   const data = imageData.data;
 
+  // ⭐ THIN PLANET LETTER BOOST
   for(let i=0;i<data.length;i+=4){
     const avg = (data[i]+data[i+1]+data[i+2])/3;
-    const val = avg > 140 ? 255 : 0;
+    const val = avg > 120 ? 255 : 0;
     data[i]=data[i+1]=data[i+2]=val;
   }
 
@@ -86,9 +89,17 @@ function mergeNearbyLetters(words){
 }
 
 /* ===================================================
-🔥 CORE ENGINE (ZONE MATCH + FUZZY PLANET DETECTION)
+🔥 CORE ENGINE (ZONE MATCH)
 =================================================== */
 function extractByPositions(words){
+
+  const PLANET_MAP={
+    SU:"Sun", MO:"Moon", MA:"Mars", ME:"Mercury",
+    JU:"Jupiter", VE:"Venus", SA:"Saturn",
+    RA:"Rahu", KE:"Ketu",
+    S:"Saturn", M:"Moon", V:"Venus",
+    J:"Jupiter", R:"Rahu", K:"Ketu"
+  };
 
   const SIGN_NAMES={
     1:"Aries",2:"Taurus",3:"Gemini",4:"Cancer",
@@ -101,35 +112,24 @@ function extractByPositions(words){
   let numbers=[];
   let planets=[];
 
-  /* ===============================
-  DETECT NUMBERS + PLANETS (FUZZY)
-  =============================== */
+  /* ===== Detect numbers & planets ===== */
   merged.forEach(w=>{
 
     const text=w.text;
 
-    // zodiac numbers
     if(/^(1[0-2]|[1-9])$/.test(text)){
       numbers.push({num:parseInt(text),x:w.x,y:w.y});
       return;
     }
 
-    if(text.length>5) return;
+    if(text.length>4) return;
 
-    // 🔥 FUZZY PLANET DETECTION
-    if(text.includes("M")) planets.push({planet:"Moon",x:w.x,y:w.y});
-    else if(text.includes("S")) planets.push({planet:"Saturn",x:w.x,y:w.y});
-    else if(text.includes("J")) planets.push({planet:"Jupiter",x:w.x,y:w.y});
-    else if(text.includes("V")) planets.push({planet:"Venus",x:w.x,y:w.y});
-    else if(text.includes("R")) planets.push({planet:"Rahu",x:w.x,y:w.y});
-    else if(text.includes("K")) planets.push({planet:"Ketu",x:w.x,y:w.y});
-    else if(text.includes("A")) planets.push({planet:"Mars",x:w.x,y:w.y});
-
+    if(PLANET_MAP[text]){
+      planets.push({planet:PLANET_MAP[text],x:w.x,y:w.y});
+    }
   });
 
-  /* ===============================
-  CREATE ZONES AROUND SIGN NUMBERS
-  =============================== */
+  /* ===== Zone matching ===== */
   const ZONE_SIZE = 140;
   const signToPlanets={};
 
@@ -148,32 +148,25 @@ function extractByPositions(words){
     });
   });
 
-  /* ===============================
-  SMART LAGNA DETECTION
-  =============================== */
+  /* ===== Lagna detection ===== */
   let lagnaSign=null;
-
   if(numbers.length){
-    const avgY=numbers.reduce((s,n)=>s+n.y,0)/numbers.length;
-    const mid=numbers.filter(n=>Math.abs(n.y-avgY)<120);
-    if(mid.length) lagnaSign=mid.sort((a,b)=>a.x-b.x)[0].num;
+    const avgY = numbers.reduce((s,n)=>s+n.y,0)/numbers.length;
+    const mid  = numbers.filter(n=>Math.abs(n.y-avgY)<120);
+    if(mid.length) lagnaSign = mid.sort((a,b)=>a.x-b.x)[0].num;
   }
 
-  /* ===============================
-  SIGN → HOUSE CONVERSION
-  =============================== */
+  /* ===== Sign → House conversion ===== */
   const finalHouses={};
   const finalPlanets={};
 
   Object.keys(signToPlanets).forEach(signKey=>{
-
     const sign=parseInt(signKey);
-    if(!signToPlanets[sign]) return;
+    if(!lagnaSign) return;
 
     const house=(sign-lagnaSign+12)%12+1;
 
     signToPlanets[sign].forEach(planet=>{
-
       if(!finalHouses[house]) finalHouses[house]=[];
 
       finalHouses[house].push({
@@ -185,9 +178,7 @@ function extractByPositions(words){
         sign:SIGN_NAMES[sign],
         house:"House "+house
       };
-
     });
-
   });
 
   return{
@@ -200,7 +191,7 @@ function extractByPositions(words){
 }
 
 /* ===================================================
-PUBLIC FUNCTION (HTML CALLS THIS)
+PUBLIC FUNCTION (CALLED BY HTML)
 =================================================== */
 window.extractChartFromImage = async function(file){
   await initOCR();
