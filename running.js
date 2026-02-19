@@ -19,7 +19,6 @@ window.extractChartFromImage = async function(file){
   await initOCR();
 
   console.log("🔍 Reading chart image...");
-
   const { data:{ text } } = await ocrWorker.recognize(file);
 
   console.log("📄 OCR TEXT:");
@@ -29,51 +28,61 @@ window.extractChartFromImage = async function(file){
 };
 
 /* ===================================================
-TEXT → PLANET DATA PARSER
+🧠 TEXT → NORTH INDIAN CHART PARSER
 =================================================== */
 function parseAstroText(rawText){
 
   const text = rawText.toUpperCase();
 
-  const PLANETS = [
-    "SUN","MOON","MARS","MERCURY","JUPITER",
-    "VENUS","SATURN","RAHU","KETU"
-  ];
-
-  const SIGNS = [
-    "ARIES","TAURUS","GEMINI","CANCER","LEO","VIRGO",
-    "LIBRA","SCORPIO","SAGITTARIUS","CAPRICORN","AQUARIUS","PISCES"
-  ];
+  /* PLANET SHORT CODES */
+  const PLANET_CODES = {
+    SU:"Sun",
+    MO:"Moon",
+    MA:"Mars",
+    ME:"Mercury",
+    JU:"Jupiter",
+    VE:"Venus",
+    SA:"Saturn",
+    RA:"Rahu",
+    KE:"Ketu",
+    UR:"Uranus",
+    NE:"Neptune",
+    PL:"Pluto"
+  };
 
   const lines = text.split("\n");
 
   const result = {
+    houses:{},
     planets:{},
     rawText:text
   };
 
-  lines.forEach(line => {
+  /* ===================================================
+  STEP 1 → FIND LINES WITH HOUSE NUMBERS
+  =================================================== */
 
-    PLANETS.forEach(planet => {
+  lines.forEach(line=>{
 
-      if(line.includes(planet)){
+    // find house number 1–12
+    const houseMatch = line.match(/\b(1[0-2]|[1-9])\b/);
 
-        const sign = SIGNS.find(s => line.includes(s));
-        const degMatch = line.match(/(\d+(\.\d+)?)/);
+    if(!houseMatch) return;
 
-        if(sign && degMatch){
-          result.planets[planet] = {
-            sign: sign,
-            degree: parseFloat(degMatch[0])
-          };
-        }
+    const house = houseMatch[0];
+    result.houses[house] = [];
 
+    // detect planets in same line
+    Object.keys(PLANET_CODES).forEach(code=>{
+      if(line.includes(code)){
+        const planetName = PLANET_CODES[code];
+        result.houses[house].push(planetName);
+        result.planets[planetName] = "House " + house;
       }
-
     });
 
   });
 
-  console.log("🪐 Extracted Planets:", result);
+  console.log("🪐 Extracted Chart:", result);
   return result;
 }
