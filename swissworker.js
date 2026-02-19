@@ -41,16 +41,25 @@ function degToSign(deg){
 }
 
 /* ===================================================
-🪐 CALCULATION
+🪐 PLANET CALCULATION
 =================================================== */
 function calculatePlanets(JD){
 
+  log("Applying Lahiri ayanamsa...");
   swe.set_sid_mode(swe.SE_SIDM_LAHIRI,0,0);
 
+  log("Reading ayanamsa...");
   const ayan = swe.get_ayanamsa_ut(JD);
 
+  log("Calculating Sun...");
   const sunRes  = swe.calc_ut(JD, swe.SE_SUN, swe.SEFLG_SWIEPH);
+
+  log("Calculating Moon...");
   const moonRes = swe.calc_ut(JD, swe.SE_MOON, swe.SEFLG_SWIEPH);
+
+  if(!sunRes || !moonRes){
+    throw new Error("Ephemeris files missing or path wrong");
+  }
 
   const sunSid  = norm360(sunRes.longitude  - ayan);
   const moonSid = norm360(moonRes.longitude - ayan);
@@ -64,25 +73,25 @@ function calculatePlanets(JD){
 }
 
 /* ===================================================
-🚀 LOAD SWISS (FINAL FIX)
+🚀 LOAD SWISS (VERCEL + WORKER SAFE)
 =================================================== */
 async function loadSwiss(){
 
   try{
     log("Importing SwissEph...");
 
+    // ⭐ ABSOLUTE PATH (CRITICAL FOR WORKERS)
     const BASE = self.location.origin + "/";
 
     const SwissEphModule = (await import(BASE + "swisseph.js")).default;
 
+    log("Creating Swiss instance...");
     swe = await SwissEphModule({
       locateFile: file => BASE + file
     });
 
-    log("Setting ephemeris path...");
-
-    // ⭐⭐⭐ FINAL FIX ⭐⭐⭐
-    swe.swe_set_ephe_path_utf8(BASE + "ephe");
+    // ⭐ FINAL CORRECT FUNCTION ⭐
+    swe.swe_set_ephe_path(BASE + "ephe");
 
     READY = true;
     log("Swiss Ready 🎉");
@@ -95,7 +104,7 @@ async function loadSwiss(){
 }
 
 /* ===================================================
-📨 WORKER MESSAGES
+📨 WORKER MESSAGE HANDLER
 =================================================== */
 self.onmessage = async (e)=>{
 
@@ -107,7 +116,9 @@ self.onmessage = async (e)=>{
     try{
       if(!READY) throw new Error("Swiss not ready");
 
+      log("Creating Julian Day...");
       const JD = getJulianDay(e.data.dob, e.data.tob);
+
       const result = calculatePlanets(JD);
 
       postMessage({ type:"result", data: result });
