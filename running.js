@@ -1,4 +1,4 @@
-console.log("📸 Chart Extractor Engine Loaded (DONUT ZONE BUILD v2)");
+console.log("📸 Chart Extractor Engine Loaded (FINAL STABLE)");
 
 (function(){
 
@@ -27,7 +27,7 @@ async function initOCR(){
 }
 
 /* ===================================================
-IMAGE PREPROCESS
+IMAGE PREPROCESS (UPSCALE + STRONG B/W)
 =================================================== */
 async function preprocessImage(file){
 
@@ -75,17 +75,18 @@ function extractNumbers(words){
 }
 
 /* ===================================================
-DONUT INK DETECTOR (returns DENSITY)
+🔥 BIG DONUT INK DETECTOR (FINAL GEOMETRY FIX)
 =================================================== */
 function detectPlanetInk(canvas, numbers){
 
   const ctx = canvas.getContext("2d");
   const img = ctx.getImageData(0,0,canvas.width,canvas.height).data;
 
-  const OUTER = 180;
-  const INNER = 70;
+  // ⭐ FINAL GEOMETRY VALUES ⭐
+  const OUTER = 320;   // planet zone distance from number
+  const INNER = 160;   // ignore number + borders
 
-  const signDensity = {};
+  const densityMap = {};
 
   numbers.forEach(n=>{
 
@@ -97,13 +98,15 @@ function detectPlanetInk(canvas, numbers){
     const startY = Math.max(0, n.y - OUTER);
     const endY   = Math.min(canvas.height, n.y + OUTER);
 
-    for(let y=startY; y<endY; y++){
-      for(let x=startX; x<endX; x++){
+    // ⭐ step 2 for speed boost (4x faster)
+    for(let y=startY; y<endY; y+=2){
+      for(let x=startX; x<endX; x+=2){
 
         const dx = x - n.x;
         const dy = y - n.y;
         const dist = Math.sqrt(dx*dx + dy*dy);
 
+        // DONUT RING ONLY
         if(dist < INNER || dist > OUTER) continue;
 
         pixels++;
@@ -113,14 +116,14 @@ function detectPlanetInk(canvas, numbers){
       }
     }
 
-    signDensity[n.num] = ink / pixels; // ⭐ density!
+    densityMap[n.num] = ink / pixels;
   });
 
-  return signDensity;
+  return densityMap;
 }
 
 /* ===================================================
-LAGNA DETECTION
+LAGNA DETECTION (GEOMETRY SAFE)
 =================================================== */
 function detectLagna(numbers){
 
@@ -136,7 +139,7 @@ function detectLagna(numbers){
 }
 
 /* ===================================================
-RELATIVE SPIKE PLANET DETECTION ⭐⭐⭐
+🔥 RELATIVE SPIKE DETECTOR (REAL PLANET DETECTION)
 =================================================== */
 function convertToHouses(densityMap, lagnaSign){
 
@@ -157,16 +160,16 @@ function convertToHouses(densityMap, lagnaSign){
   const sorted = [...values].sort((a,b)=>a-b);
   const median = sorted[Math.floor(sorted.length/2)];
 
-  console.log("Density avg:",avg,"median:",median);
+  console.log("Density avg:",avg," median:",median);
 
   Object.keys(densityMap).forEach(signKey=>{
 
     const density = densityMap[signKey];
 
-    // ⭐ RELATIVE SPIKE DETECTOR ⭐
+    // ⭐ FINAL SPIKE LOGIC ⭐
     const spike =
-      density > avg * 1.32 &&
-      density > median * 1.18;
+      density > avg * 1.25 &&
+      density > median * 1.15;
 
     if(!spike) return;
 
