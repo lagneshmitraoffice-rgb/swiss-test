@@ -1,4 +1,4 @@
-console.log("📸 Chart Extractor Engine Loaded (STABLE BUILD)");
+console.log("📸 Chart Extractor Engine Loaded (STABLE BUILD v2)");
 
 (function(){
 
@@ -54,7 +54,7 @@ async function preprocessImage(file){
 }
 
 /* ===================================================
-MERGE NUMBER OCR
+EXTRACT SIGN NUMBERS
 =================================================== */
 function extractNumbers(words){
 
@@ -75,7 +75,7 @@ function extractNumbers(words){
 }
 
 /* ===================================================
-PIXEL PLANET DETECTOR
+PIXEL INK DETECTOR
 =================================================== */
 function detectPlanetInk(canvas, numbers){
 
@@ -94,8 +94,8 @@ function detectPlanetInk(canvas, numbers){
     const startY = Math.max(0, n.y - ZONE);
     const endY   = Math.min(canvas.height, n.y + ZONE);
 
-    for(let x=startX; x<endX; x++){
-      for(let y=startY; y<endY; y++){
+    for(let y=startY; y<endY; y++){
+      for(let x=startX; x<endX; x++){
         const i = (y*canvas.width + x) * 4;
         if(img[i] === 0) ink++;
       }
@@ -108,7 +108,7 @@ function detectPlanetInk(canvas, numbers){
 }
 
 /* ===================================================
-LAGNA DETECTION (GEOMETRY SAFE)
+LAGNA DETECTION
 =================================================== */
 function detectLagna(numbers){
 
@@ -122,13 +122,11 @@ function detectLagna(numbers){
     return middle.sort((a,b)=>a.x-b.x)[0].num;
   }
 
-  // fallback → leftmost
-  console.log("⚠️ Lagna fallback used");
   return numbers.sort((a,b)=>a.x-b.x)[0].num;
 }
 
 /* ===================================================
-SIGN → HOUSE CONVERSION (DYNAMIC THRESHOLD)
+SIGN → HOUSE CONVERSION (SMART THRESHOLD)
 =================================================== */
 function convertToHouses(signInk, lagnaSign){
 
@@ -142,16 +140,24 @@ function convertToHouses(signInk, lagnaSign){
   const planets = {};
 
   const inkValues = Object.values(signInk);
-  if(!inkValues.length || !lagnaSign) 
+
+  if(!inkValues.length || !lagnaSign)
     return {houses:{}, planets:{}};
 
+  const avgInk = inkValues.reduce((a,b)=>a+b,0) / inkValues.length;
   const maxInk = Math.max(...inkValues);
-  const threshold = maxInk * 0.35; // 🔥 dynamic threshold
+
+  // ⭐ relative + absolute noise protection
+  const threshold = Math.max(avgInk * 1.4, maxInk * 0.25);
+
+  console.log("Ink stats:", {avgInk, maxInk, threshold});
 
   Object.keys(signInk).forEach(signKey=>{
 
     const sign = parseInt(signKey);
-    if(signInk[sign] < threshold) return;
+    const ink  = signInk[sign];
+
+    if(ink < threshold) return; // reject noise
 
     const house = (sign - lagnaSign + 12) % 12 + 1;
 
@@ -193,7 +199,7 @@ async function runExtractor(file){
     };
   }
 
-  const signInk = detectPlanetInk(canvas, numbers);
+  const signInk   = detectPlanetInk(canvas, numbers);
   const lagnaSign = detectLagna(numbers);
   const {houses, planets} = convertToHouses(signInk, lagnaSign);
 
