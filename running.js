@@ -21,7 +21,7 @@ async function initOCR(){
 }
 
 /* ===================================================
-IMAGE PREPROCESS
+IMAGE PREPROCESS (UPSCALE + B/W)
 =================================================== */
 async function preprocessImage(file){
 
@@ -49,6 +49,7 @@ async function preprocessImage(file){
 
 /* ===================================================
 LETTER MERGE ENGINE
+Fixes OCR broken letters like M O → MO
 =================================================== */
 function mergeNearbyLetters(words){
 
@@ -86,7 +87,7 @@ function mergeNearbyLetters(words){
 }
 
 /* ===================================================
-CORE ENGINE
+CORE ASTRO ENGINE (SIGN → HOUSE)
 =================================================== */
 function extractByPositions(words){
 
@@ -109,6 +110,9 @@ function extractByPositions(words){
   let signs=[];
   let planets=[];
 
+  /* ===============================
+  DETECT SIGNS & PLANETS
+  =============================== */
   merged.forEach(w=>{
 
     const text=w.text;
@@ -126,6 +130,9 @@ function extractByPositions(words){
 
   });
 
+  /* ===============================
+  PLANET → NEAREST SIGN
+  =============================== */
   const planetToSign={};
 
   planets.forEach(p=>{
@@ -147,13 +154,29 @@ function extractByPositions(words){
     }
   });
 
-  // TOP MOST SIGN = Lagna
+  /* ===================================================
+  ⭐ SMART LAGNA DETECTION (GEOMETRY FIX)
+  Lagna = LEFT MIDDLE diamond in North chart
+  =================================================== */
   let lagnaSign=null;
 
   if(signs.length){
-    lagnaSign=signs.sort((a,b)=>a.y-b.y)[0].sign;
+
+    const avgY = signs.reduce((sum,s)=>sum+s.y,0) / signs.length;
+
+    const middleBand = signs.filter(s =>
+      Math.abs(s.y - avgY) < 120
+    );
+
+    if(middleBand.length){
+      const leftMost = middleBand.sort((a,b)=>a.x-b.x)[0];
+      lagnaSign = leftMost.sign;
+    }
   }
 
+  /* ===============================
+  SIGN → HOUSE CONVERSION
+  =============================== */
   const finalHouses={};
   const finalPlanets={};
 
@@ -185,7 +208,7 @@ function extractByPositions(words){
 }
 
 /* ===================================================
-PUBLIC FUNCTION (THIS FIXES YOUR ERROR)
+PUBLIC FUNCTION (FIXES ERROR)
 =================================================== */
 window.extractChartFromImage = async function(file){
 
