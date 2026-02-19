@@ -1,4 +1,4 @@
-console.log("📸 Chart Extractor Engine Running (POSITION MODE v3)");
+console.log("📸 Chart Extractor Engine Running (FINAL STABLE)");
 
 /* ===================================================
 INIT OCR WORKER
@@ -9,7 +9,6 @@ async function initOCR(){
   if(ocrWorker) return;
 
   ocrWorker = await Tesseract.createWorker("eng");
-
   await ocrWorker.setParameters({
     tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
     preserve_interword_spaces: "1"
@@ -19,7 +18,7 @@ async function initOCR(){
 }
 
 /* ===================================================
-🧠 IMAGE UPSCALE + BINARIZE
+IMAGE UPSCALE + BINARIZE
 =================================================== */
 async function preprocessImage(file){
 
@@ -45,27 +44,20 @@ async function preprocessImage(file){
 }
 
 /* ===================================================
-🚀 MAIN EXTRACT FUNCTION
+MAIN ENTRY
 =================================================== */
 window.extractChartFromImage = async function(file){
-
   await initOCR();
-
   const canvas = await preprocessImage(file);
-
-  console.log("🔍 Running OCR WORD MODE...");
   const { data } = await ocrWorker.recognize(canvas);
-
   return extractByPositions(data.words);
 };
 
 /* ===================================================
-🔥 LETTER MERGE ENGINE
-Merge nearby letters into clusters
+LETTER MERGE ENGINE
 =================================================== */
 function mergeNearbyLetters(words){
 
-  // sort by Y then X
   words.sort((a,b)=>{
     if(Math.abs(a.bbox.y0 - b.bbox.y0) < 20)
       return a.bbox.x0 - b.bbox.x0;
@@ -76,16 +68,11 @@ function mergeNearbyLetters(words){
   let current = null;
 
   words.forEach(w=>{
-
     const text = w.text.toUpperCase().trim();
     if(!text) return;
 
     if(!current){
-      current = {
-        text,
-        x: w.bbox.x0,
-        y: w.bbox.y0
-      };
+      current = { text, x:w.bbox.x0, y:w.bbox.y0 };
       return;
     }
 
@@ -94,129 +81,107 @@ function mergeNearbyLetters(words){
 
     if(closeY && closeX){
       current.text += text;
-    } else {
+    }else{
       merged.push(current);
-      current = {
-        text,
-        x: w.bbox.x0,
-        y: w.bbox.y0
-      };
+      current = { text, x:w.bbox.x0, y:w.bbox.y0 };
     }
-
   });
 
   if(current) merged.push(current);
-
   return merged;
 }
 
 /* ===================================================
-🔥 CORE POSITION ENGINE (FINAL)
+FINAL STABILIZER
+One planet → one house only
+=================================================== */
+function stabilizePlanetMapping(result){
+
+  const finalHouses = {};
+  const finalPlanets = {};
+  const planetCandidates = {};
+
+  Object.keys(result.houses).forEach(h=>{
+    result.houses[h].forEach(p=>{
+      if(!planetCandidates[p]) planetCandidates[p]=[];
+      planetCandidates[p].push(parseInt(h));
+    });
+  });
+
+  Object.keys(planetCandidates).forEach(planet=>{
+    const chosenHouse = planetCandidates[planet][0];
+
+    if(!finalHouses[chosenHouse])
+      finalHouses[chosenHouse]=[];
+
+    finalHouses[chosenHouse].push(planet);
+    finalPlanets[planet] = "House " + chosenHouse;
+  });
+
+  return { houses:finalHouses, planets:finalPlanets };
+}
+
+/* ===================================================
+CORE POSITION ENGINE
 =================================================== */
 function extractByPositions(words){
 
   const PLANET_MAP = {
-
-    // 2-letter
     SU:"Sun", MO:"Moon", MA:"Mars", ME:"Mercury",
     JU:"Jupiter", VE:"Venus", SA:"Saturn",
     RA:"Rahu", KE:"Ketu",
-
-    // 1-letter fallback
     S:"Saturn", M:"Moon", V:"Venus",
     J:"Jupiter", R:"Rahu", K:"Ketu"
   };
 
   const mergedWords = mergeNearbyLetters(words);
-
   let houseNumbers = [];
   let planetWords  = [];
 
-  /* ===================================================
-  STEP 1 → DETECT HOUSE NUMBERS & PLANETS
-  =================================================== */
   mergedWords.forEach(w => {
 
     const text = w.text;
 
-    // House numbers
     if(/^(1[0-2]|[1-9])$/.test(text)){
-      houseNumbers.push({
-        house: parseInt(text),
-        x: w.x,
-        y: w.y
-      });
+      houseNumbers.push({ house:parseInt(text), x:w.x, y:w.y });
       return;
     }
 
-    // Ignore long garbage
     if(text.length > 6) return;
 
-    // Check planet codes inside cluster
     Object.keys(PLANET_MAP).forEach(code=>{
       if(text.includes(code)){
-        planetWords.push({
-          planet: PLANET_MAP[code],
-          x: w.x,
-          y: w.y
-        });
+        planetWords.push({ planet:PLANET_MAP[code], x:w.x, y:w.y });
       }
     });
 
   });
 
-  console.log("🏠 Houses detected:", houseNumbers);
-  console.log("🪐 Planets detected:", planetWords);
-
-  /* ===================================================
-  STEP 2 → NEAREST HOUSE MAPPING
-  =================================================== */
   const result = { houses:{}, planets:{} };
 
   planetWords.forEach(p => {
+    let closestHouse=null, minDist=Infinity;
 
-    let closestHouse = null;
-    let minDist = Infinity;
-
-    houseNumbers.forEach(h => {
-      const dx = p.x - h.x;
-      const dy = p.y - h.y;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-
-      if(dist < minDist){
-        minDist = dist;
-        closestHouse = h.house;
-      }
+    houseNumbers.forEach(h=>{
+      const dx=p.x-h.x;
+      const dy=p.y-h.y;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist<minDist){ minDist=dist; closestHouse=h.house; }
     });
 
-    if(closestHouse !== null){
-
-      if(!result.houses[closestHouse])
-        result.houses[closestHouse] = [];
-
-      if(!result.houses[closestHouse].includes(p.planet)){
-        result.houses[closestHouse].push(p.planet);
-      }
-
-      result.planets[p.planet] = "House " + closestHouse;
+    if(closestHouse!==null){
+      if(!result.houses[closestHouse]) result.houses[closestHouse]=[];
+      result.houses[closestHouse].push(p.planet);
+      result.planets[p.planet]="House "+closestHouse;
     }
-
   });
 
-  /* ===================================================
-  STEP 3 → SORT OUTPUT
-  =================================================== */
-  const sortedHouses = {};
-  Object.keys(result.houses)
-    .sort((a,b)=>a-b)
-    .forEach(h=>{
-      sortedHouses[h] = result.houses[h];
-    });
+  const stable = stabilizePlanetMapping(result);
 
   return {
-    extractedHouses: sortedHouses,
-    planetMapping: result.planets,
+    extractedHouses: stable.houses,
+    planetMapping: stable.planets,
     detectedHouseCount: houseNumbers.length,
-    detectedPlanetCount: planetWords.length
+    detectedPlanetCount: Object.keys(stable.planets).length
   };
-  }
+      }
