@@ -52,22 +52,25 @@ window.extractChartFromImage = async function(file){
   await initOCR();
 
   const fullCanvas = await preprocessImage(file);
-
   const { data:{ text } } = await ocrWorker.recognize(fullCanvas);
 
-  console.log("📄 FINAL OCR TEXT:");
+  console.log("📄 OCR TEXT:");
   console.log(text);
 
-  return parseAstroText(text);
+  // 🔥 Step 1 → Try full parser
+  const parsed = parseAstroText(text);
+
+  // 🔥 Step 2 → Always run fallback astro parser
+  const fallback = miniAstroParser(text);
+
+  return {
+    fullParser: parsed,
+    fallbackAstro: fallback
+  };
 };
 
 /* ===================================================
-🔥 SMART GRID PARSER (FINAL STABLE VERSION)
-Works with:
-Planet line
-House line
-Same line
-Reverse order
+🔥 SMART GRID PARSER
 =================================================== */
 function parseAstroText(rawText){
 
@@ -88,17 +91,13 @@ function parseAstroText(rawText){
   };
 
   const lines = text.split("\n").map(l=>l.trim()).filter(Boolean);
-
   let memoryPlanets = [];
 
   for(let i=0;i<lines.length;i++){
 
     const line = lines[i];
-
-    // detect house number
     const houseMatch = line.match(/\b(1[0-2]|[1-9])\b/);
 
-    // detect planets in line
     const foundPlanets = [];
     Object.keys(PLANET_MAP).forEach(code=>{
       if(line.includes(code)){
@@ -106,39 +105,79 @@ function parseAstroText(rawText){
       }
     });
 
-    // CASE 1 → same line planet + house
+    // same line
     if(houseMatch && foundPlanets.length>0){
-
       const house = houseMatch[0];
       if(!result.houses[house]) result.houses[house]=[];
-
       foundPlanets.forEach(p=>{
         result.houses[house].push(p);
         result.planets[p]="House "+house;
       });
-
       continue;
     }
 
-    // CASE 2 → planet line first, house next
+    // planet line first
     if(foundPlanets.length>0){
       memoryPlanets = foundPlanets;
       continue;
     }
 
     if(houseMatch && memoryPlanets.length>0){
-
       const house = houseMatch[0];
       if(!result.houses[house]) result.houses[house]=[];
-
       memoryPlanets.forEach(p=>{
         result.houses[house].push(p);
         result.planets[p]="House "+house;
       });
-
       memoryPlanets=[];
     }
   }
 
   return result;
-          }
+}
+
+/* ===================================================
+🚀 FALLBACK ASTRO PARSER (ALWAYS RETURNS DATA)
+=================================================== */
+function miniAstroParser(rawText){
+
+  const text = rawText.toUpperCase();
+
+  const PLANETS = {
+    SU:"Sun", MO:"Moon", MA:"Mars", ME:"Mercury",
+    JU:"Jupiter", VE:"Venus", SA:"Saturn",
+    RA:"Rahu", KE:"Ketu"
+  };
+
+  // Detect Lagna sign
+  let lagnaSign = null;
+  const lagnaMatch = text.match(/(ASC|LA|LAGNA)\s*(\d{1,2})/);
+  if(lagnaMatch) lagnaSign = parseInt(lagnaMatch[2]);
+
+  // detect first planets found
+  let planetsFound = [];
+  Object.keys(PLANETS).forEach(code=>{
+    if(text.includes(code) && planetsFound.length < 2){
+      planetsFound.push(PLANETS[code]);
+    }
+  });
+
+  // detect any sign number
+  const signMatch = text.match(/\b(1[0-2]|[1-9])\b/);
+  const planetSign = signMatch ? parseInt(signMatch[0]) : null;
+
+  // calculate house
+  const houses = {};
+  if(lagnaSign && planetSign){
+    planetsFound.forEach(p=>{
+      const house = (planetSign - lagnaSign + 12) % 12 + 1;
+      houses[p] = "House " + house;
+    });
+  }
+
+  return {
+    LagnaSign: lagnaSign,
+    PlanetsDetected: planetsFound,
+    CalculatedHouses: houses
+  };
+                                          }
