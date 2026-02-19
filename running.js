@@ -21,7 +21,7 @@ async function initOCR(){
 }
 
 /* ===================================================
-IMAGE PREPROCESS (UPSCALE + B/W)
+IMAGE PREPROCESS (UPSCALE + HIGH CONTRAST)
 =================================================== */
 async function preprocessImage(file){
 
@@ -48,7 +48,7 @@ async function preprocessImage(file){
 }
 
 /* ===================================================
-MERGE BROKEN OCR LETTERS  (M O -> MO)
+MERGE BROKEN OCR LETTERS (M O → MO)
 =================================================== */
 function mergeNearbyLetters(words){
 
@@ -86,17 +86,9 @@ function mergeNearbyLetters(words){
 }
 
 /* ===================================================
-🔥 CORE ENGINE (ZONE MATCH)
+🔥 CORE ENGINE (ZONE MATCH + FUZZY PLANET DETECTION)
 =================================================== */
 function extractByPositions(words){
-
-  const PLANET_MAP={
-    SU:"Sun", MO:"Moon", MA:"Mars", ME:"Mercury",
-    JU:"Jupiter", VE:"Venus", SA:"Saturn",
-    RA:"Rahu", KE:"Ketu",
-    S:"Saturn", M:"Moon", V:"Venus",
-    J:"Jupiter", R:"Rahu", K:"Ketu"
-  };
 
   const SIGN_NAMES={
     1:"Aries",2:"Taurus",3:"Gemini",4:"Cancer",
@@ -110,23 +102,28 @@ function extractByPositions(words){
   let planets=[];
 
   /* ===============================
-  DETECT NUMBERS + PLANETS
+  DETECT NUMBERS + PLANETS (FUZZY)
   =============================== */
   merged.forEach(w=>{
 
     const text=w.text;
 
-    // numbers = zodiac signs
+    // zodiac numbers
     if(/^(1[0-2]|[1-9])$/.test(text)){
       numbers.push({num:parseInt(text),x:w.x,y:w.y});
       return;
     }
 
-    if(text.length>4) return;
+    if(text.length>5) return;
 
-    if(PLANET_MAP[text]){
-      planets.push({planet:PLANET_MAP[text],x:w.x,y:w.y});
-    }
+    // 🔥 FUZZY PLANET DETECTION
+    if(text.includes("M")) planets.push({planet:"Moon",x:w.x,y:w.y});
+    else if(text.includes("S")) planets.push({planet:"Saturn",x:w.x,y:w.y});
+    else if(text.includes("J")) planets.push({planet:"Jupiter",x:w.x,y:w.y});
+    else if(text.includes("V")) planets.push({planet:"Venus",x:w.x,y:w.y});
+    else if(text.includes("R")) planets.push({planet:"Rahu",x:w.x,y:w.y});
+    else if(text.includes("K")) planets.push({planet:"Ketu",x:w.x,y:w.y});
+    else if(text.includes("A")) planets.push({planet:"Mars",x:w.x,y:w.y});
 
   });
 
@@ -137,26 +134,18 @@ function extractByPositions(words){
   const signToPlanets={};
 
   numbers.forEach(n=>{
-
-    const left   = n.x - ZONE_SIZE;
-    const right  = n.x + ZONE_SIZE;
-    const top    = n.y - ZONE_SIZE;
-    const bottom = n.y + ZONE_SIZE;
+    const left=n.x-ZONE_SIZE;
+    const right=n.x+ZONE_SIZE;
+    const top=n.y-ZONE_SIZE;
+    const bottom=n.y+ZONE_SIZE;
 
     planets.forEach(p=>{
-      const inside =
-        p.x > left &&
-        p.x < right &&
-        p.y > top &&
-        p.y < bottom;
-
-      if(inside){
+      if(p.x>left && p.x<right && p.y>top && p.y<bottom){
         if(!signToPlanets[n.num]) signToPlanets[n.num]=[];
         if(!signToPlanets[n.num].includes(p.planet))
           signToPlanets[n.num].push(p.planet);
       }
     });
-
   });
 
   /* ===============================
@@ -165,28 +154,23 @@ function extractByPositions(words){
   let lagnaSign=null;
 
   if(numbers.length){
-    const avgY = numbers.reduce((s,n)=>s+n.y,0)/numbers.length;
-    const mid  = numbers.filter(n=>Math.abs(n.y-avgY)<120);
-    if(mid.length){
-      lagnaSign = mid.sort((a,b)=>a.x-b.x)[0].num;
-    }
+    const avgY=numbers.reduce((s,n)=>s+n.y,0)/numbers.length;
+    const mid=numbers.filter(n=>Math.abs(n.y-avgY)<120);
+    if(mid.length) lagnaSign=mid.sort((a,b)=>a.x-b.x)[0].num;
   }
 
   /* ===============================
-  SIGN → HOUSE CONVERSION (SAFE)
+  SIGN → HOUSE CONVERSION
   =============================== */
   const finalHouses={};
   const finalPlanets={};
 
   Object.keys(signToPlanets).forEach(signKey=>{
 
-    const sign = parseInt(signKey);
+    const sign=parseInt(signKey);
+    if(!signToPlanets[sign]) return;
 
-    // 🛡️ CRASH PROTECTION
-    if(!signToPlanets[sign] || !signToPlanets[sign].length)
-      return;
-
-    const house = (sign - lagnaSign + 12)%12 + 1;
+    const house=(sign-lagnaSign+12)%12+1;
 
     signToPlanets[sign].forEach(planet=>{
 
@@ -216,13 +200,11 @@ function extractByPositions(words){
 }
 
 /* ===================================================
-PUBLIC FUNCTION (USED BY HTML)
+PUBLIC FUNCTION (HTML CALLS THIS)
 =================================================== */
 window.extractChartFromImage = async function(file){
-
   await initOCR();
   const canvas = await preprocessImage(file);
   const { data } = await ocrWorker.recognize(canvas);
-
   return extractByPositions(data.words);
 };
