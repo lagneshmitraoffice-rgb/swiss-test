@@ -1,4 +1,4 @@
-console.log("📸 Chart Extractor Engine Loaded (DONUT ZONE BUILD)");
+console.log("📸 Chart Extractor Engine Loaded (DONUT ZONE BUILD v2)");
 
 (function(){
 
@@ -27,7 +27,7 @@ async function initOCR(){
 }
 
 /* ===================================================
-IMAGE PREPROCESS (UPSCALE + STRONG B/W)
+IMAGE PREPROCESS
 =================================================== */
 async function preprocessImage(file){
 
@@ -54,7 +54,7 @@ async function preprocessImage(file){
 }
 
 /* ===================================================
-EXTRACT SIGN NUMBERS FROM OCR
+EXTRACT SIGN NUMBERS
 =================================================== */
 function extractNumbers(words){
 
@@ -75,22 +75,22 @@ function extractNumbers(words){
 }
 
 /* ===================================================
-🔥 DONUT PLANET DETECTOR (REAL FIX)
-Counts ink in RING area around numbers
+DONUT INK DETECTOR (returns DENSITY)
 =================================================== */
 function detectPlanetInk(canvas, numbers){
 
   const ctx = canvas.getContext("2d");
   const img = ctx.getImageData(0,0,canvas.width,canvas.height).data;
 
-  const OUTER = 180;  // outer ring radius
-  const INNER = 70;   // ignore center area (numbers + borders)
+  const OUTER = 180;
+  const INNER = 70;
 
-  const signInk = {};
+  const signDensity = {};
 
   numbers.forEach(n=>{
 
     let ink = 0;
+    let pixels = 0;
 
     const startX = Math.max(0, n.x - OUTER);
     const endX   = Math.min(canvas.width, n.x + OUTER);
@@ -104,23 +104,23 @@ function detectPlanetInk(canvas, numbers){
         const dy = y - n.y;
         const dist = Math.sqrt(dx*dx + dy*dy);
 
-        // ⭐ DONUT AREA ONLY ⭐
         if(dist < INNER || dist > OUTER) continue;
+
+        pixels++;
 
         const i = (y*canvas.width + x) * 4;
         if(img[i] === 0) ink++;
       }
     }
 
-    signInk[n.num] = ink;
+    signDensity[n.num] = ink / pixels; // ⭐ density!
   });
 
-  return signInk;
+  return signDensity;
 }
 
 /* ===================================================
-LAGNA DETECTION (GEOMETRY SAFE)
-Left-middle diamond = Lagna
+LAGNA DETECTION
 =================================================== */
 function detectLagna(numbers){
 
@@ -132,14 +132,13 @@ function detectLagna(numbers){
   if(middle.length)
     return middle.sort((a,b)=>a.x-b.x)[0].num;
 
-  console.log("⚠️ Lagna fallback used");
   return numbers.sort((a,b)=>a.x-b.x)[0].num;
 }
 
 /* ===================================================
-SIGN → HOUSE CONVERSION (SMART THRESHOLD)
+RELATIVE SPIKE PLANET DETECTION ⭐⭐⭐
 =================================================== */
-function convertToHouses(signInk, lagnaSign){
+function convertToHouses(densityMap, lagnaSign){
 
   const SIGN_NAMES = {
     1:"Aries",2:"Taurus",3:"Gemini",4:"Cancer",
@@ -150,18 +149,28 @@ function convertToHouses(signInk, lagnaSign){
   const houses = {};
   const planets = {};
 
-  const inkValues = Object.values(signInk);
-  if(!inkValues.length || !lagnaSign) 
+  const values = Object.values(densityMap);
+  if(!values.length || !lagnaSign)
     return {houses:{}, planets:{}};
 
-  const maxInk = Math.max(...inkValues);
-  const threshold = maxInk * 0.28;   // ⭐ tuned threshold
+  const avg = values.reduce((a,b)=>a+b,0) / values.length;
+  const sorted = [...values].sort((a,b)=>a-b);
+  const median = sorted[Math.floor(sorted.length/2)];
 
-  Object.keys(signInk).forEach(signKey=>{
+  console.log("Density avg:",avg,"median:",median);
+
+  Object.keys(densityMap).forEach(signKey=>{
+
+    const density = densityMap[signKey];
+
+    // ⭐ RELATIVE SPIKE DETECTOR ⭐
+    const spike =
+      density > avg * 1.32 &&
+      density > median * 1.18;
+
+    if(!spike) return;
 
     const sign = parseInt(signKey);
-    if(signInk[sign] < threshold) return;
-
     const house = (sign - lagnaSign + 12) % 12 + 1;
 
     if(!houses[house]) houses[house] = [];
@@ -187,24 +196,15 @@ async function runExtractor(file){
 
   await initOCR();
   const canvas = await preprocessImage(file);
-
   const { data } = await ocrWorker.recognize(canvas);
 
   const numbers = extractNumbers(data.words);
+  if(!numbers.length)
+    return {LagnaSign:null,extractedHouses:{},planetMapping:{}};
 
-  if(!numbers.length){
-    return {
-      LagnaSign: null,
-      extractedHouses: {},
-      planetMapping: {},
-      detectedSigns: 0,
-      detectedPlanetZones: 0
-    };
-  }
-
-  const signInk = detectPlanetInk(canvas, numbers);
-  const lagnaSign = detectLagna(numbers);
-  const {houses, planets} = convertToHouses(signInk, lagnaSign);
+  const densityMap = detectPlanetInk(canvas, numbers);
+  const lagnaSign  = detectLagna(numbers);
+  const {houses, planets} = convertToHouses(densityMap, lagnaSign);
 
   return {
     LagnaSign: lagnaSign,
@@ -216,15 +216,10 @@ async function runExtractor(file){
 }
 
 /* ===================================================
-GLOBAL EXPORT (FIXES ALL ERRORS)
+GLOBAL EXPORT
 =================================================== */
 window.extractChartFromImage = async function(file){
-  try{
-    return await runExtractor(file);
-  }catch(err){
-    console.error("❌ OCR ERROR", err);
-    throw err;
-  }
+  return await runExtractor(file);
 };
 
 })();
