@@ -1,4 +1,4 @@
-console.log("📸 Chart Extractor Engine Loaded (STABLE BUILD v2)");
+console.log("📸 Chart Extractor Engine Loaded (DONUT ZONE BUILD)");
 
 (function(){
 
@@ -27,7 +27,7 @@ async function initOCR(){
 }
 
 /* ===================================================
-IMAGE PREPROCESS
+IMAGE PREPROCESS (UPSCALE + STRONG B/W)
 =================================================== */
 async function preprocessImage(file){
 
@@ -54,7 +54,7 @@ async function preprocessImage(file){
 }
 
 /* ===================================================
-EXTRACT SIGN NUMBERS
+EXTRACT SIGN NUMBERS FROM OCR
 =================================================== */
 function extractNumbers(words){
 
@@ -75,27 +75,38 @@ function extractNumbers(words){
 }
 
 /* ===================================================
-PIXEL INK DETECTOR
+🔥 DONUT PLANET DETECTOR (REAL FIX)
+Counts ink in RING area around numbers
 =================================================== */
 function detectPlanetInk(canvas, numbers){
 
   const ctx = canvas.getContext("2d");
   const img = ctx.getImageData(0,0,canvas.width,canvas.height).data;
 
-  const ZONE = 160;
+  const OUTER = 180;  // outer ring radius
+  const INNER = 70;   // ignore center area (numbers + borders)
+
   const signInk = {};
 
   numbers.forEach(n=>{
 
     let ink = 0;
 
-    const startX = Math.max(0, n.x - ZONE);
-    const endX   = Math.min(canvas.width, n.x + ZONE);
-    const startY = Math.max(0, n.y - ZONE);
-    const endY   = Math.min(canvas.height, n.y + ZONE);
+    const startX = Math.max(0, n.x - OUTER);
+    const endX   = Math.min(canvas.width, n.x + OUTER);
+    const startY = Math.max(0, n.y - OUTER);
+    const endY   = Math.min(canvas.height, n.y + OUTER);
 
     for(let y=startY; y<endY; y++){
       for(let x=startX; x<endX; x++){
+
+        const dx = x - n.x;
+        const dy = y - n.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+
+        // ⭐ DONUT AREA ONLY ⭐
+        if(dist < INNER || dist > OUTER) continue;
+
         const i = (y*canvas.width + x) * 4;
         if(img[i] === 0) ink++;
       }
@@ -108,20 +119,20 @@ function detectPlanetInk(canvas, numbers){
 }
 
 /* ===================================================
-LAGNA DETECTION
+LAGNA DETECTION (GEOMETRY SAFE)
+Left-middle diamond = Lagna
 =================================================== */
 function detectLagna(numbers){
 
   if(!numbers.length) return null;
 
   const avgY = numbers.reduce((s,n)=>s+n.y,0) / numbers.length;
-
   const middle = numbers.filter(n=>Math.abs(n.y-avgY)<120);
 
-  if(middle.length){
+  if(middle.length)
     return middle.sort((a,b)=>a.x-b.x)[0].num;
-  }
 
+  console.log("⚠️ Lagna fallback used");
   return numbers.sort((a,b)=>a.x-b.x)[0].num;
 }
 
@@ -140,24 +151,16 @@ function convertToHouses(signInk, lagnaSign){
   const planets = {};
 
   const inkValues = Object.values(signInk);
-
-  if(!inkValues.length || !lagnaSign)
+  if(!inkValues.length || !lagnaSign) 
     return {houses:{}, planets:{}};
 
-  const avgInk = inkValues.reduce((a,b)=>a+b,0) / inkValues.length;
   const maxInk = Math.max(...inkValues);
-
-  // ⭐ relative + absolute noise protection
-  const threshold = Math.max(avgInk * 1.4, maxInk * 0.25);
-
-  console.log("Ink stats:", {avgInk, maxInk, threshold});
+  const threshold = maxInk * 0.28;   // ⭐ tuned threshold
 
   Object.keys(signInk).forEach(signKey=>{
 
     const sign = parseInt(signKey);
-    const ink  = signInk[sign];
-
-    if(ink < threshold) return; // reject noise
+    if(signInk[sign] < threshold) return;
 
     const house = (sign - lagnaSign + 12) % 12 + 1;
 
@@ -199,7 +202,7 @@ async function runExtractor(file){
     };
   }
 
-  const signInk   = detectPlanetInk(canvas, numbers);
+  const signInk = detectPlanetInk(canvas, numbers);
   const lagnaSign = detectLagna(numbers);
   const {houses, planets} = convertToHouses(signInk, lagnaSign);
 
@@ -213,7 +216,7 @@ async function runExtractor(file){
 }
 
 /* ===================================================
-GLOBAL EXPORT
+GLOBAL EXPORT (FIXES ALL ERRORS)
 =================================================== */
 window.extractChartFromImage = async function(file){
   try{
