@@ -10,7 +10,7 @@ async function initOCR(){
 
   ocrWorker = await Tesseract.createWorker("eng");
 
-  // ⭐ VERY IMPORTANT SETTINGS
+  // ⭐ HIGH ACCURACY SETTINGS
   await ocrWorker.setParameters({
     tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
     preserve_interword_spaces: "1"
@@ -20,8 +20,8 @@ async function initOCR(){
 }
 
 /* ===================================================
-🧠 SUPER IMAGE PREPROCESS (FINAL MAGIC)
-Zoom + High Contrast + Binarize
+🧠 SUPER IMAGE PREPROCESS
+Zoom + Crop + Binarize (Best combo for charts)
 =================================================== */
 async function preprocessImage(file){
 
@@ -30,28 +30,79 @@ async function preprocessImage(file){
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
 
-  // ⭐ 3x UPSCALE (MOST IMPORTANT)
-  canvas.width  = img.width * 3;
-  canvas.height = img.height * 3;
-
-  ctx.drawImage(img,0,0,canvas.width,canvas.height);
+  canvas.width  = img.width;
+  canvas.height = img.height;
+  ctx.drawImage(img,0,0);
 
   const imageData = ctx.getImageData(0,0,canvas.width,canvas.height);
   const data = imageData.data;
 
-  for(let i=0;i<data.length;i+=4){
+  let minX=99999, minY=99999, maxX=0, maxY=0;
 
-    const avg = (data[i]+data[i+1]+data[i+2])/3;
+  // ===============================
+  // STEP 1 → FIND LIGHT REGION (CHART AREA)
+  // ===============================
+  for(let y=0;y<canvas.height;y++){
+    for(let x=0;x<canvas.width;x++){
 
-    // ⭐ AGGRESSIVE THRESHOLD
-    const val = avg > 140 ? 255 : 0;
+      const i=(y*canvas.width+x)*4;
+      const r=data[i], g=data[i+1], b=data[i+2];
+      const brightness = (r+g+b)/3;
 
-    data[i] = data[i+1] = data[i+2] = val;
+      if(brightness > 170){
+        if(x<minX) minX=x;
+        if(y<minY) minY=y;
+        if(x>maxX) maxX=x;
+        if(y>maxY) maxY=y;
+      }
+    }
   }
 
-  ctx.putImageData(imageData,0,0);
+  // fallback if crop fails
+  if(minX>maxX){
+    console.log("⚠️ Crop fail → using full image");
+    return canvas;
+  }
 
-  return canvas;
+  const padding = 20;
+  minX = Math.max(0, minX-padding);
+  minY = Math.max(0, minY-padding);
+  maxX = Math.min(canvas.width, maxX+padding);
+  maxY = Math.min(canvas.height, maxY+padding);
+
+  const cropWidth  = maxX-minX;
+  const cropHeight = maxY-minY;
+
+  // ===============================
+  // STEP 2 → UPSCALE CROPPED AREA
+  // ===============================
+  const cropCanvas = document.createElement("canvas");
+  const cropCtx = cropCanvas.getContext("2d");
+
+  cropCanvas.width  = cropWidth * 3;
+  cropCanvas.height = cropHeight * 3;
+
+  cropCtx.drawImage(
+    canvas,
+    minX, minY, cropWidth, cropHeight,
+    0,0,cropCanvas.width,cropCanvas.height
+  );
+
+  // ===============================
+  // STEP 3 → STRONG BLACK & WHITE
+  // ===============================
+  const cropData = cropCtx.getImageData(0,0,cropCanvas.width,cropCanvas.height);
+  const d = cropData.data;
+
+  for(let i=0;i<d.length;i+=4){
+    const avg=(d[i]+d[i+1]+d[i+2])/3;
+    const val = avg>150 ? 255 : 0;
+    d[i]=d[i+1]=d[i+2]=val;
+  }
+
+  cropCtx.putImageData(cropData,0,0);
+
+  return cropCanvas;
 }
 
 /* ===================================================
@@ -74,9 +125,9 @@ window.extractChartFromImage = async function(file){
 };
 
 /* ===================================================
-🔥 SMART MEMORY PARSER (NORTH INDIAN CHART)
+🔥 NORTH INDIAN CHART MEMORY PARSER
 Planet lines appear BEFORE house number
-Example:
+
 JU
 ME PL
 SU 7
@@ -117,14 +168,14 @@ function parseAstroText(rawText){
     line = line.trim();
     if(!line) return;
 
-    // STEP 1 → collect planets
+    // STEP 1 → Collect planets first
     Object.keys(PLANET_CODES).forEach(code => {
       if(line.includes(code)){
         pendingPlanets.push(PLANET_CODES[code]);
       }
     });
 
-    // STEP 2 → detect house number
+    // STEP 2 → Detect house number
     const houseMatch = line.match(/\b(1[0-2]|[1-9])\b/);
 
     if(houseMatch && pendingPlanets.length > 0){
@@ -145,4 +196,4 @@ function parseAstroText(rawText){
   });
 
   return result;
-}
+      }
