@@ -3,12 +3,15 @@ console.log("🧠 Swiss Worker Booting...");
 let swe = null;
 let READY = false;
 
-function sendLog(msg){
+function log(msg){
   postMessage({ type:"log", message: msg });
 }
 
-/* ================= JULIAN DAY ================= */
+/* ===================================================
+📅 JULIAN DAY
+=================================================== */
 function getJulianDay(dob,tob){
+
   const [year,month,day] = dob.split("-").map(Number);
   let [hour,min] = tob.split(":").map(Number);
 
@@ -31,38 +34,42 @@ function getJulianDay(dob,tob){
 
 function norm360(x){ x%=360; if(x<0)x+=360; return x; }
 
-/* ================= CALC ================= */
+function degToSign(deg){
+  const s=["Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+           "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"];
+  return s[Math.floor(deg/30)]+" "+(deg%30).toFixed(2)+"°";
+}
+
+/* ===================================================
+🪐 CALCULATION
+=================================================== */
 function calculatePlanets(JD){
 
-  sendLog("Setting sidereal mode...");
   swe.set_sid_mode(swe.SE_SIDM_LAHIRI,0,0);
 
-  sendLog("Getting ayanamsa...");
   const ayan = swe.get_ayanamsa_ut(JD);
 
-  sendLog("Calling swe.calc_ut SUN...");
   const sunRes  = swe.calc_ut(JD, swe.SE_SUN, swe.SEFLG_SWIEPH);
-
-  sendLog("Calling swe.calc_ut MOON...");
   const moonRes = swe.calc_ut(JD, swe.SE_MOON, swe.SEFLG_SWIEPH);
-
-  sendLog("Swiss returned results!");
 
   const sunSid  = norm360(sunRes.longitude  - ayan);
   const moonSid = norm360(moonRes.longitude - ayan);
 
   return {
-    JD,
-    Sun: sunSid,
-    Moon: moonSid
+    JulianDay: JD.toFixed(6),
+    Ayanamsa: ayan.toFixed(6)+"°",
+    Sun: degToSign(sunSid),
+    Moon: degToSign(moonSid)
   };
 }
 
-/* ================= LOAD ================= */
+/* ===================================================
+🚀 LOAD SWISS (FINAL FIX)
+=================================================== */
 async function loadSwiss(){
 
   try{
-    sendLog("Loading Swiss WASM...");
+    log("Importing SwissEph...");
 
     const BASE = self.location.origin + "/";
 
@@ -72,11 +79,13 @@ async function loadSwiss(){
       locateFile: file => BASE + file
     });
 
-    sendLog("Setting ephemeris path...");
-    swe.swe_set_ephe_path(BASE + "ephe");
+    log("Setting ephemeris path...");
+
+    // ⭐⭐⭐ FINAL FIX ⭐⭐⭐
+    swe.swe_set_ephe_path_utf8(BASE + "ephe");
 
     READY = true;
-    sendLog("Swiss READY");
+    log("Swiss Ready 🎉");
 
     postMessage({ type:"ready" });
 
@@ -85,7 +94,9 @@ async function loadSwiss(){
   }
 }
 
-/* ================= MESSAGE ================= */
+/* ===================================================
+📨 WORKER MESSAGES
+=================================================== */
 self.onmessage = async (e)=>{
 
   if(e.data.type === "init"){
@@ -96,11 +107,7 @@ self.onmessage = async (e)=>{
     try{
       if(!READY) throw new Error("Swiss not ready");
 
-      sendLog("Calculating JD...");
       const JD = getJulianDay(e.data.dob, e.data.tob);
-
-      sendLog("JD = " + JD);
-
       const result = calculatePlanets(JD);
 
       postMessage({ type:"result", data: result });
